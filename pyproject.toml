@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mini_agent"
+version = "0.1.0"
+description = "A dynamic, need-based multi-agent AI framework with session memory, action tracking, tool approval, and browser automation"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [{name = "ayyandurai", email = "ayyandurai456@gmail.com"}]
+keywords = ["ai", "agent", "framework", "multi-agent"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "openai>=1.0",
+    "requests>=2.31",
+    "pydantic>=2.8",
+    "python-dotenv>=1.0",
+    "aiohttp>=3.9",
+    "fastapi>=0.111",
+    "uvicorn>=0.24",
+]
+
+[project.optional-dependencies]
+browser = ["playwright>=1.38"]
+
+[project.scripts]
+mini-agent-install-browser = "mini_agent.cli:install_browser"
+
+[project.urls]
+Homepage = "https://github.com/ayyandurai111/mini-agent-framework"
+Repository = "https://github.com/ayyandurai111/mini-agent-framework.git"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["mini_agent", "mini_agent.*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-p no:cacheprovider"
