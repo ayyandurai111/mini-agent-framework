@@ -12,6 +12,18 @@ from openai import APIError, OpenAI, RateLimitError, AuthenticationError, APICon
 from ..llm.base import BaseLLMProvider
 
 
+ALLOWED_MODELS = [
+    "z-ai/glm-5.2",
+    "poolside/laguna-xs-2.1",
+    "nvidia/nemotron-3-ultra-550b-a55b",
+    "stepfun-ai/step-3.7-flash",
+    "moonshotai/kimi-k2.6",
+    "mistralai/mistral-medium-3.5-128b",
+    "deepseek-ai/deepseek-v4-flash",
+    "deepseek-ai/deepseek-v4-pro",
+]
+
+
 class NvidiaProviderError(Exception):
     """Base exception for NVIDIA provider errors."""
     pass
@@ -56,6 +68,11 @@ class NvidiaProvider(BaseLLMProvider):
         self.client = OpenAI(base_url=base_url, api_key=api_key, timeout=120.0, max_retries=1)
 
         self.model = model
+        if self.model not in ALLOWED_MODELS:
+            raise NvidiaProviderError(
+                f"Model '{model}' is not allowed. Choose from:\n"
+                + "\n".join(f"  - {m}" for m in ALLOWED_MODELS)
+            )
         self.temperature = temperature
         self.top_p = top_p
         self.max_tokens = max_tokens
