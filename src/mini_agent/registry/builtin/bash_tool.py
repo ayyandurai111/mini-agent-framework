@@ -1,4 +1,4 @@
-﻿"""
+"""
 registry/builtin/bash_tool.py
 --------------------------------
 Unified shell tool â€” replaces run_command, execute_python_code,

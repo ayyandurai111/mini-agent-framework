@@ -1,4 +1,4 @@
-﻿"""
+"""
 core/agent.py
 ---------------
 Worker that executes one task via the tool-execution loop.

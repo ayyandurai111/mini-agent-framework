@@ -1,4 +1,4 @@
-﻿"""
+"""
 providers/nvidia_provider.py
 ------------------------------
 NVIDIA NIM provider (OpenAI-compatible endpoint).

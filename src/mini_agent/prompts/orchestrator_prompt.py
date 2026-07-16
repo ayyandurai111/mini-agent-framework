@@ -1,4 +1,4 @@
-﻿import textwrap
+import textwrap
 
 ORCHESTRATOR_SYSTEM_PROMPT = textwrap.dedent("""\
 ## ROLE

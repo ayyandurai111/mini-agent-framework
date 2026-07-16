@@ -1,4 +1,4 @@
-﻿"""
+"""
 core/json_utils.py
 ---------------------
 Shared JSON parsing helper. LLMs sometimes wrap JSON in markdown code

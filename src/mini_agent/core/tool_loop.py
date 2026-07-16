@@ -1,4 +1,4 @@
-﻿"""
+"""
 core/tool_loop.py
 --------------------
 ReAct-style tool execution loop. The LLM responds with JSON each turn:

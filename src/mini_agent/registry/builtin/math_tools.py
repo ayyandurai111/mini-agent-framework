@@ -1,4 +1,4 @@
-﻿"""
+"""
 registry/builtin/math_tools.py
 ---------------------------------
 Math and small utility tools.

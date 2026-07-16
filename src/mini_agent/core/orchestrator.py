@@ -1,4 +1,4 @@
-﻿"""
+"""
 core/orchestrator.py
 -----------------------
 Plans tasks, spawns agents with matched tools/skills, and aggregates results.
@@ -94,9 +94,12 @@ class Orchestrator:
             system_prompt += f"\nAVAILABLE TOOLS:\n" + "\n".join(tool_descs) + "\n"
 
         skill_names = self.skill_registry.list()
-        skill_descs = [f"  - {self.skill_registry.get(s).describe()}" for s in skill_names]
-        if skill_descs:
-            system_prompt += f"\nSKILLS AVAILABLE:\n" + "\n".join(skill_descs) + "\n"
+        if skill_names:
+            skill_descs = [f"  - {self.skill_registry.get(s).describe()}" for s in skill_names]
+            system_prompt += "\n## SKILLS AVAILABLE\n" + "\n".join(skill_descs) + "\n"
+            system_prompt += "\nOnly set 'skill' field to one of the above names. Do NOT invent skill names.\n"
+        else:
+            system_prompt += "\n## SKILLS AVAILABLE\n  (none registered — do NOT set 'skill' in sub_tasks)\n"
 
         read_only_names = self.tool_registry.get_read_only()
         read_only_tools = [
@@ -126,6 +129,14 @@ class Orchestrator:
         else:
             parsed = try_parse_json(raw_response)
             plan = parsed if isinstance(parsed, dict) else {"needs_sub_agents": False, "direct_answer": "", "sub_tasks": []}
+
+        # Strip hallucinated skills not in registry
+        for t in plan.get("sub_tasks", []):
+            s = t.get("skill", "")
+            if s and not self.skill_registry.get(s):
+                import warnings
+                warnings.warn(f"Plan referenced unknown skill '{s}' — removed")
+                t["skill"] = ""
 
         self.action_tracker.on_plan(
             task,

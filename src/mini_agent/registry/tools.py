@@ -1,4 +1,4 @@
-﻿"""
+"""
 registry/tools.py
 -------------------
 Tool class — wraps a Python function with metadata for the agent loop.

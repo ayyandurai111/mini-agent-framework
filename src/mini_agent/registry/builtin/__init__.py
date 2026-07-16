@@ -1,4 +1,4 @@
-﻿"""
+"""
 registry/builtin/
 -------------------
 Ready-made tools organized by category. Import BUILTIN_TOOLS for the safe

@@ -1,4 +1,4 @@
-﻿"""
+"""
 core/approval.py
 -------------------
 Ready-made approval callbacks. An approval_callback is any function with

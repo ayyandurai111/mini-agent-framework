@@ -1,4 +1,4 @@
-﻿"""
+"""
 mini_agent
 ----------------------
 Public API - this is all a framework user should import.

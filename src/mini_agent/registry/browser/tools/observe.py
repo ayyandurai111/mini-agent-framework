@@ -1,4 +1,4 @@
-﻿from ..models import ToolResponse
+from ..models import ToolResponse
 from .base import BaseTool
 
 ELEMENT_CATEGORIES = {

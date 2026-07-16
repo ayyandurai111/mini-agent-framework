@@ -1,4 +1,4 @@
-﻿class BrowserAgentError(Exception):
+class BrowserAgentError(Exception):
     code: str = "browser_agent_error"
 
     def __init__(self, message: str, **details):

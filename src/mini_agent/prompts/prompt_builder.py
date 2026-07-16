@@ -1,4 +1,4 @@
-﻿"""
+"""
 prompts/prompt_builder.py
 ---------------------------
 Builds the full system prompt for the main (agent) at runtime.

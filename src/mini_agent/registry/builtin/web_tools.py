@@ -1,4 +1,4 @@
-﻿"""
+"""
 registry/builtin/web_tools.py
 --------------------------------
 Web access tools. Most require the `requests` package.

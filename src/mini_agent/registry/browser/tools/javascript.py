@@ -1,4 +1,4 @@
-﻿from ..exceptions import ScriptExecutionError
+from ..exceptions import ScriptExecutionError
 from ..models import ToolResponse
 from .base import BaseTool
 

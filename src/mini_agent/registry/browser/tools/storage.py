@@ -1,4 +1,4 @@
-﻿from ..exceptions import InvalidToolParamsError, StorageError
+from ..exceptions import InvalidToolParamsError, StorageError
 from ..models import ToolResponse
 from .base import BaseTool
 

@@ -1,4 +1,4 @@
-﻿from ..exceptions import DownloadError, ElementNotFoundError, InvalidToolParamsError
+from ..exceptions import DownloadError, ElementNotFoundError, InvalidToolParamsError
 from ..models import ToolResponse
 from .base import BaseTool
 

@@ -1,4 +1,4 @@
-﻿from ..exceptions import ElementNotFoundError
+from ..exceptions import ElementNotFoundError
 from ..models import ToolResponse
 from .base import BaseTool
 

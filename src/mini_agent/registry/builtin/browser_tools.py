@@ -1,4 +1,4 @@
-﻿"""
+"""
 registry/builtin/browser_tools.py
 ---------------------------------
 Professional browser automation tools â€” wraps browser_agent (Playwright)

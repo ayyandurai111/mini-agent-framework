@@ -1,4 +1,4 @@
-﻿from .session import BrowserSession
+from .session import BrowserSession
 from .models import ToolResponse
 from .exceptions import BrowserAgentError
 

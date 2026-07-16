@@ -1,4 +1,4 @@
-﻿"""
+"""
 registry/builtin/system_tools.py
 ------------------------------------
 Date/time and system-info tools.

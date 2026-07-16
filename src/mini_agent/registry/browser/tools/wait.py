@@ -1,4 +1,4 @@
-﻿from ..exceptions import BrowserTimeoutError, ElementNotFoundError, InvalidToolParamsError
+from ..exceptions import BrowserTimeoutError, ElementNotFoundError, InvalidToolParamsError
 from ..models import ToolResponse
 from .base import BaseTool
 

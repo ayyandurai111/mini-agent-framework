@@ -1,4 +1,4 @@
-﻿"""
+"""
 core/action_tracker.py
 -----------------------
 ActionTracker — live-action callback system for the framework.

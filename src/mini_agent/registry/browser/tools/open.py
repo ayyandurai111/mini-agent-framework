@@ -1,4 +1,4 @@
-﻿from ..exceptions import NavigationError
+from ..exceptions import NavigationError
 from ..models import ToolResponse
 from .base import BaseTool
 

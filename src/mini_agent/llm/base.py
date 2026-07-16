@@ -1,4 +1,4 @@
-﻿"""
+"""
 llm/base.py
 ------------
 Abstract base class for LLM providers. All providers must implement generate().

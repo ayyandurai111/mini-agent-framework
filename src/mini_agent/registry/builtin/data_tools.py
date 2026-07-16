@@ -1,4 +1,4 @@
-﻿"""
+"""
 registry/builtin/data_tools.py
 ---------------------------------
 Structured data (JSON) read/write helpers.

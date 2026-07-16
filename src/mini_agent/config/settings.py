@@ -1,4 +1,4 @@
-﻿"""
+"""
 config/settings.py
 --------------------
 Framework-wide limits, centralized here for cost/loop control.

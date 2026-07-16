@@ -1,4 +1,4 @@
-﻿"""
+"""
 registry/builtin/file_tools.py
 ---------------------------------
 File I/O tools. These modify the local filesystem where the framework
