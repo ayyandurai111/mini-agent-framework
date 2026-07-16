@@ -13,7 +13,7 @@ from ..tools import Tool
 def bash(command: str, timeout: int = 30) -> str:
     """
     Executes any shell command (bash, python, pip, etc.) and returns output.
-    Full OS access â€” restrict with allowed_roles in production.
+    Full OS access â€” restrict with caution in production.
     """
     if not command or not command.strip():
         return "Error: no command provided"

@@ -17,7 +17,7 @@ from .memory.conversation import ConversationMemory
 from ..registry.tools import ToolRegistry
 from ..prompts.orchestrator_prompt import ORCHESTRATOR_SYSTEM_PROMPT
 from ..config.settings import MAX_AGENTS, MAX_RECURSION_DEPTH
-from ..skills import Skill, SkillRegistry, read_skill_content, discover_package_skills
+from ..skills import Skill, SkillRegistry, read_skill_content
 
 
 class Orchestrator:
@@ -38,14 +38,11 @@ class Orchestrator:
         # Live action event tracker â€” emits plan, agent, tool events
         self.action_tracker = action_tracker or ActionTracker(on_event=console_event_logger)
         self.skill_registry = SkillRegistry()
-        for skill in discover_package_skills():
-            self.skill_registry.register(skill)
-        # Session-level LLM-compressed memory â€” saves tokens by summarizing
-        # past agent runs instead of passing raw transcripts.
+        # Session memory - stores raw-text conversation turns for context
         self.conversation_memory = (
-            ConversationMemory(llm_provider=llm_provider, persist_file=memory_file)
+            ConversationMemory(persist_file=memory_file)
             if memory_file
-            else ConversationMemory(llm_provider=llm_provider)
+            else ConversationMemory()
         )
 
     def register_tool(self, tool):
@@ -82,8 +79,10 @@ class Orchestrator:
         combined = f"{task} {instructions}"
         return self.skill_registry.match(combined)
 
-    def _plan(self, task: str) -> dict:
+    def _plan(self, task: str, session_memory: str = "") -> dict:
         system_prompt = ORCHESTRATOR_SYSTEM_PROMPT
+        if session_memory:
+            system_prompt += f"\n\n## CONVERSATION HISTORY\n{session_memory}\n"
 
         tool_names = self.tool_registry.list_available()
         tool_descs = []
@@ -112,7 +111,7 @@ class Orchestrator:
                 task=task,
                 tools=read_only_tools,
                 max_iterations=2,
-                exit_keys=["needs_sub_agents"],
+                exit_keys=["final_answer", "needs_sub_agents"],
                 return_parsed=True,
                 action_tracker=self.action_tracker,
                 agent_id="planner",
@@ -139,22 +138,23 @@ class Orchestrator:
         return plan
 
     def spawn_agent(self, role: str, instructions: str, capability_names: list, depth: int = 0,
-                    skills_context: str = "", skill_names: list = None) -> Agent:
+                    skills_context: str = "", skill_names: list = None,
+                    session_memory: str = "") -> Agent:
         if len(self.active_agents) >= self.max_agents:
             raise RuntimeError(f"MAX_AGENTS limit ({self.max_agents}) reached.")
         if depth > MAX_RECURSION_DEPTH:
             raise RuntimeError(f"MAX_RECURSION_DEPTH ({MAX_RECURSION_DEPTH}) exceeded.")
 
-        tools = self.tool_registry.match(capability_names, role=role)
+        tools = self.tool_registry.match(capability_names)
         agent = Agent(
             role=role,
             instructions=instructions,
             llm_provider=self.llm_provider,
             tools=tools,
             depth=depth,
-            spawn_callback=self.spawn_agent,   # enables recursive spawning
+            spawn_callback=self.spawn_agent,
             approval_callback=self.approval_callback,
-            conversation_summary=self.conversation_memory.get_context(),
+            session_memory=session_memory,
             action_tracker=self.action_tracker,
             skills_context=skills_context,
         )
@@ -162,7 +162,7 @@ class Orchestrator:
         self.action_tracker.on_agent_start(agent.id, role, instructions, capabilities=capability_names, skills=skill_names or [])
         return agent
 
-    def _run_agents_need_based(self, sub_tasks: list) -> dict:
+    def _run_agents_need_based(self, sub_tasks: list):
         n = len(sub_tasks)
         deps = [set(t.get("depends_on", [])) for t in sub_tasks]
 
@@ -177,6 +177,8 @@ class Orchestrator:
 
         agent_map = {}
         results = {}
+        agents_data = []
+        dep_results = {}
         for level in levels:
             with ThreadPoolExecutor(max_workers=min(len(level), self.max_agents)) as executor:
                 future_to_idx = {}
@@ -189,12 +191,32 @@ class Orchestrator:
                         skill = self.skill_registry.get(skill_name)
                         if skill:
                             skills_context = f"[SKILL: {skill.name}]\n{read_skill_content(skill)}"
+
+                    session_memory = ""
+                    if task.get("memory", False):
+                        dep_parts = []
+                        for dep_idx in task.get("depends_on", []):
+                            if dep_idx in dep_results:
+                                dep_role = sub_tasks[dep_idx].get("role", "?")
+                                dep_resp = dep_results[dep_idx].get("response", str(dep_results[dep_idx]))[:500]
+                                dep_parts.append(
+                                    f"Agent[{dep_idx}] ({dep_role}):\n{dep_resp}"
+                                )
+                        if dep_parts:
+                            session_memory = (
+                                "=== DEPENDENCY RESULTS ===\n"
+                                "Below are results from agents this task depends on. "
+                                "Use them to complete your work:\n\n"
+                                + "\n\n".join(dep_parts)
+                            )
+
                     agent = self.spawn_agent(
                         role=task.get("role", "worker"),
                         instructions=task.get("instructions", ""),
                         capability_names=cap_names,
                         skills_context=skills_context,
                         skill_names=[skill_name] if skill_name else [],
+                        session_memory=session_memory,
                     )
                     agent_map[idx] = agent.id
                     future_to_idx[executor.submit(agent.run)] = idx
@@ -204,21 +226,32 @@ class Orchestrator:
                     try:
                         result = future.result()
                         results[agent_map[idx]] = result
+                        dep_results[idx] = result
                         agent_id = agent_map[idx]
-                        self.action_tracker.on_agent_end(agent_id, sub_tasks[idx].get("role", "worker"), result)
-                        self.conversation_memory.add_entry(
-                            role=sub_tasks[idx].get("role", "worker"),
-                            content=f"[{agent_id}] {result}",
-                        )
+                        role = sub_tasks[idx].get("role", "worker")
+                        response_text = result.get("response", str(result))
+                        self.action_tracker.on_agent_end(agent_id, role, response_text)
+                        agents_data.append({
+                            "index": idx,
+                            "role": role,
+                            "response": response_text,
+                            "tool_calls": result.get("tool_calls", []),
+                        })
                     except Exception as exc:
-                        results[agent_map[idx]] = f"Agent error: {exc}"
+                        results[agent_map[idx]] = {"response": f"Agent error: {exc}", "tool_calls": []}
+                        dep_results[idx] = results[agent_map[idx]]
                         self.action_tracker.on_agent_end(agent_map[idx], sub_tasks[idx].get("role", "worker"), f"Agent error: {exc}")
-        return results
+        return agents_data, results
 
     def run(self, task: str) -> dict:
         self.active_agents.clear()
 
-        plan = self._plan(task)
+        plan = self._plan(task, session_memory=self.conversation_memory.get_context())
+
+        if "final_answer" in plan:
+            answer = plan["final_answer"]
+            self.conversation_memory.add_turn(task, plan, [], answer)
+            return {"final_answer": answer, "sub_agent_results": {}}
 
         matched_skills = self._match_skills(task)
         skills_context = self._build_skills_context(matched_skills)
@@ -231,26 +264,38 @@ class Orchestrator:
                 capability_names=capability_names,
                 skills_context=skills_context,
                 skill_names=[s.name for s in matched_skills],
+                session_memory=self.conversation_memory.get_context(),
             )
             try:
                 result = agent.run()
             except Exception as exc:
-                result = f"Agent execution failed: {exc}"
-            self.action_tracker.on_agent_end(agent.id, "direct_agent", result)
-            self.conversation_memory.add_entry(role="direct_agent", content=result)
-            return {"final_answer": result, "sub_agent_results": {agent.id: result}}
+                result = {"response": f"Agent execution failed: {exc}", "tool_calls": []}
+            response_text = result.get("response", str(result))
+            self.action_tracker.on_agent_end(agent.id, "direct_agent", response_text)
+            agents_data = [{
+                "index": None,
+                "role": "direct_agent",
+                "response": response_text,
+                "tool_calls": result.get("tool_calls", []),
+            }]
+            self.conversation_memory.add_turn(task, plan, agents_data, response_text)
+            return {"final_answer": response_text, "sub_agent_results": {agent.id: response_text}}
 
         sub_tasks = plan.get("sub_tasks", [])[: self.max_agents]
-        results = self._run_agents_need_based(sub_tasks)
+        agents_data, results = self._run_agents_need_based(sub_tasks)
 
         self.action_tracker.on_aggregate(task)
         final_answer = self._aggregate(task, results)
+        self.conversation_memory.add_turn(task, plan, agents_data, final_answer)
         return {"final_answer": final_answer, "sub_agent_results": results}
 
     def _aggregate(self, original_task: str, results: dict) -> str:
         if not results:
             return "No results to aggregate."
-        combined = "\n\n".join(f"[{agent_id}]\n{output}" for agent_id, output in results.items())
+        combined = "\n\n".join(
+            f"[{agent_id}]\n{output.get('response', str(output))}"
+            for agent_id, output in results.items()
+        )
         try:
             aggregation_prompt = (
                 f"Original task: {original_task}\n\n"

@@ -3,7 +3,7 @@ registry/builtin/file_tools.py
 ---------------------------------
 File I/O tools. These modify the local filesystem where the framework
 runs, so write_text_file / delete_file are inherently higher-risk than
-read-only tools. Use `allowed_roles` (see registry/tools.py) to restrict
+read-only tools. Use `caution` (see registry/tools.py) to restrict
 which agents can use the write/delete variants in production.
 """
 
@@ -68,7 +68,7 @@ def file_exists(path: str) -> str:
 
 
 def delete_file(path: str) -> str:
-    """Deletes a file. Irreversible â€” use validator/allowed_roles to gate this."""
+    """Deletes a file. Irreversible â€” use validator/caution to gate this."""
     try:
         resolved = _resolve_path(path)
         os.remove(resolved)

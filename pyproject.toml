@@ -43,6 +43,9 @@ Repository = "https://github.com/ayyandurai111/mini-agent-framework.git"
 where = ["src"]
 include = ["mini_agent", "mini_agent.*"]
 
+[tool.setuptools.package-data]
+mini_agent = ["skills/**/*.md"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-p no:cacheprovider"

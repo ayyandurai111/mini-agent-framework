@@ -1,12 +1,12 @@
 ﻿"""
 registry/tools.py
 -------------------
-Tool class with hybrid auto-detect/manual parameters, validators, and role gating.
+Tool class — wraps a Python function with metadata for the agent loop.
 ToolRegistry maps capability names to tool objects.
 """
 
 import inspect
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional
 
 
@@ -15,10 +15,9 @@ class Tool:
     name: str
     description: str
     func: Callable
-    parameters: Optional[Dict[str, str]] = None   # {"city": "description string"}
+    parameters: Optional[Dict[str, str]] = None
     validator: Optional[Callable[..., bool]] = None
     on_error: Optional[Callable[[Exception], str]] = None
-    allowed_roles: Optional[List[str]] = None      # None = allowed for every role
     requires_approval: bool = False
     read_only: bool = True
 
@@ -31,7 +30,7 @@ class Tool:
         try:
             sig = inspect.signature(self.func)
         except (ValueError, TypeError):
-            return {"*args": "any (fallback â€” could not inspect signature)"}
+            return {"*args": "any (fallback — could not inspect signature)"}
         for param_name, param in sig.parameters.items():
             type_name = (
                 param.annotation.__name__
@@ -42,12 +41,6 @@ class Tool:
             suffix = "" if required else f" (optional, default={param.default})"
             schema[param_name] = f"{type_name}{suffix}"
         return schema
-
-    def is_allowed_for(self, role: Optional[str]) -> bool:
-        """Checks whether the given agent role may use this tool."""
-        if self.allowed_roles is None:
-            return True
-        return role in self.allowed_roles
 
     def run(self, *args, **kwargs):
         if self.validator is not None:
@@ -72,30 +65,19 @@ class ToolRegistry:
         self._tools: Dict[str, Tool] = {}
 
     def register(self, tool: Tool):
-        """Register a custom tool (overwrites an existing tool with the same name)."""
         self._tools[tool.name] = tool
 
     def unregister(self, name: str):
-        """Remove a tool from the registry, if present."""
         self._tools.pop(name, None)
 
     def get(self, name: str) -> Tool:
         return self._tools.get(name)
 
-    def match(self, capability_names: List[str], role: Optional[str] = None) -> List[Tool]:
-        """
-        Returns the tools matching the requested capability names.
-        If `role` is given, tools restricted via allowed_roles that don't
-        include this role are filtered out.
-        """
-        matched = [self._tools[name] for name in capability_names if name in self._tools]
-        if role is None:
-            return matched
-        return [tool for tool in matched if tool.is_allowed_for(role)]
+    def match(self, capability_names: List[str]) -> List[Tool]:
+        return [self._tools[name] for name in capability_names if name in self._tools]
 
     def list_available(self) -> List[str]:
         return list(self._tools.keys())
 
-    def get_read_only(self, role: Optional[str] = None) -> List[str]:
-        return [name for name, t in self._tools.items()
-                if t.read_only and t.is_allowed_for(role)]
+    def get_read_only(self) -> List[str]:
+        return [name for name, t in self._tools.items() if t.read_only]

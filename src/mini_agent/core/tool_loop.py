@@ -29,6 +29,7 @@ def run_with_tools(
     agent_id: str = "",
     exit_keys: Union[str, List[str]] = "final_answer",
     return_parsed: bool = False,
+    tool_history: list = None,
 ) -> str:
     tool_map = {tool.name: tool for tool in tools}
     transcript = task
@@ -101,6 +102,13 @@ def run_with_tools(
                     tool_result = tool.run(**arguments)
                 except Exception as exc:
                     tool_result = f"Error running tool '{tool_name}': {exc}"
+
+            if tool_history is not None:
+                tool_history.append({
+                    "tool": tool_name,
+                    "arguments": arguments,
+                    "result": str(tool_result)[:500],
+                })
 
             if action_tracker:
                 action_tracker.on_tool_result(agent_id, tool_name, tool_result)

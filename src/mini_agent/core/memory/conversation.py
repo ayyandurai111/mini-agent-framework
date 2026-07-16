@@ -1,69 +1,83 @@
-﻿"""
-core/memory/conversation.py
--------------------------------
-ConversationMemory â€” LLM-summarizes every agent conversation before storing.
-Only the last N summarized entries are kept. Persisted to a JSON file so
-memory survives PC shutdown; loaded into RAM on startup.
-"""
-
-import json
+﻿import json
 import os
 from typing import List, Optional
 
-from ...llm.base import BaseLLMProvider
-from ...config.settings import MEMORY_MAX_STORED_ENTRIES, MEMORY_SUMMARY_MAX_TOKENS, MEMORY_PERSIST_FILE
+from ...config.settings import MEMORY_MAX_TURNS, MEMORY_CONTEXT_TURNS, MEMORY_PERSIST_FILE
 
 
 class ConversationMemory:
-    def __init__(self, llm_provider: Optional[BaseLLMProvider] = None,
-                 max_stored: int = MEMORY_MAX_STORED_ENTRIES,
-                 summary_max_tokens: int = MEMORY_SUMMARY_MAX_TOKENS,
+    def __init__(self, max_turns: int = MEMORY_MAX_TURNS,
                  persist_file: str = MEMORY_PERSIST_FILE):
-        self._summaries: List[str] = self._load(persist_file)
-        self._llm_provider = llm_provider
-        self._max_stored = max_stored
-        self._summary_max_tokens = summary_max_tokens
+        self._turns: List[str] = self._load(persist_file)
+        self._max_turns = max_turns
         self._persist_file = persist_file
 
-    def add_entry(self, role: str, content: str):
-        if self._llm_provider is None:
-            self._summaries.append(f"[{role}] {content[:200]}")
-        else:
-            summary = self._summarize(role, content)
-            self._summaries.append(summary)
-        while len(self._summaries) > self._max_stored:
-            self._summaries.pop(0)
+    def add_turn(self, user_input: str, plan: dict, agents: list, result: str):
+        formatted = self._format(user_input, plan, agents, result)
+        self._turns.append(formatted)
+        while len(self._turns) > self._max_turns:
+            self._turns.pop(0)
         self._save()
 
-    def _summarize(self, role: str, content: str) -> str:
-        prompt = (
-            f"Summarize the following agent conversation in concise form "
-            f"(under {self._summary_max_tokens} tokens). "
-            "Preserve key facts, decisions, actions taken, and results. "
-            "Strip greetings and filler. Output only the summary â€” no preamble.\n\n"
-            f"Agent role: {role}\n"
-            f"Content:\n{content[:1200]}"
-        )
-        try:
-            return self._llm_provider.generate(
-                system_prompt="You are a conversation summarizer. Be concise.",
-                user_message=prompt,
-            ).strip()
-        except Exception:
-            return f"[{role}] {content[:200]}"
-
     def get_context(self) -> str:
-        if not self._summaries:
+        count = min(MEMORY_CONTEXT_TURNS, len(self._turns))
+        if count == 0:
             return ""
-        lines = "\n".join(f"- {s}" for s in self._summaries)
-        return (
-            f"[Recent agent conversations (last {len(self._summaries)})]\n{lines}"
-        )
+        recent = self._turns[-count:]
+        return "\n\n".join(recent)
+
+    def _format(self, user_input: str, plan: dict, agents: list, result: str) -> str:
+        lines = []
+        lines.append("=== USER ===")
+        lines.append(user_input)
+        lines.append("")
+
+        needs_sub = plan.get("needs_sub_agents", False)
+        sub_tasks = plan.get("sub_tasks", [])
+        lines.append("=== PLAN ===")
+        if needs_sub and sub_tasks:
+            lines.append(f"sub_agents: {len(sub_tasks)}")
+            for i, t in enumerate(sub_tasks):
+                deps = t.get("depends_on", [])
+                dep_str = f" (depends on {', '.join(str(d) for d in deps)})" if deps else ""
+                cap_str = ""
+                caps = t.get("required_capabilities", [])
+                if caps:
+                    cap_str = f" [{', '.join(caps)}]"
+                lines.append(f"  {i}: {t.get('role', '?')}{cap_str} — {t.get('instructions', '')[:80]}{dep_str}")
+        else:
+            lines.append("direct_agent")
+        lines.append("")
+
+        for agent in agents:
+            idx = agent.get("index")
+            role = agent.get("role", "?")
+            if idx is not None:
+                lines.append(f"=== AGENT[{idx}]: {role} ===")
+            else:
+                lines.append(f"=== AGENT[direct]: {role} ===")
+
+            response = agent.get("response", "")
+            lines.append(f"[{response[:200]}]")
+
+            for tc in agent.get("tool_calls", []):
+                tool = tc.get("tool", "?")
+                args = tc.get("arguments", {})
+                arg_str = ", ".join(f"{k}={v}" for k, v in args.items())
+                res = str(tc.get("result", ""))[:200].replace("\n", " ")
+                lines.append(f"  >> {tool}({arg_str}) -> {res}")
+
+            lines.append("")
+
+        lines.append("=== RESULT ===")
+        lines.append(result[:500])
+        return "\n".join(lines)
 
     def _save(self):
         try:
+            os.makedirs(os.path.dirname(self._persist_file), exist_ok=True)
             with open(self._persist_file, "w", encoding="utf-8") as f:
-                json.dump(self._summaries, f, ensure_ascii=False, indent=2)
+                json.dump(self._turns, f, ensure_ascii=False, indent=2)
         except (OSError, PermissionError, IOError):
             pass
 
@@ -74,5 +88,9 @@ class ConversationMemory:
         except (FileNotFoundError, json.JSONDecodeError):
             return []
 
-    def raw_summaries(self) -> List[str]:
-        return list(self._summaries)
+    def raw_turns(self) -> List[str]:
+        return list(self._turns)
+
+    def clear(self):
+        self._turns = []
+        self._save()

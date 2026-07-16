@@ -14,11 +14,11 @@ def build_agent_system_prompt(
     role: str,
     instructions: str,
     tools: List[Tool],
-    conversation_summary: str = "",
+    session_memory: str = "",
     skills_context: str = "",
 ) -> str:
     skills_block = _make_skills_block(skills_context)
-    memory_block = _make_memory_block(conversation_summary)
+    memory_block = _make_memory_block(session_memory)
     tools_block, contract = _make_tools_block(tools)
     rules = _RULES
     role_header = _make_role_header(role)
@@ -61,15 +61,15 @@ def _make_skills_block(skills_context: str) -> str:
     )
 
 
-def _make_memory_block(conversation_summary: str) -> str:
-    if not conversation_summary:
+def _make_memory_block(session_memory: str) -> str:
+    if not session_memory:
         return ""
     return (
         "\n\nPRIOR SESSION MEMORY\n"
         "Summary of relevant past work. Use it for continuity \u2014 don't "
         "re-ask for information already established here, and don't "
         "contradict prior decisions without good reason:\n"
-        f"{conversation_summary}\n"
+        f"{session_memory}\n"
     )
 
 

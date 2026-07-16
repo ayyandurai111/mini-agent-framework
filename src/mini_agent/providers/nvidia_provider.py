@@ -36,12 +36,12 @@ class NvidiaProvider(BaseLLMProvider):
     def __init__(
         self,
         api_key: str = None,
-        model: str = "deepseek-ai/deepseek-v4-pro",
+        model: str = "mistralai/mistral-medium-3.5-128b",
         temperature: float = 0.7,
         top_p: float = 0.95,
         max_tokens: int = 4096,
         base_url: str = "https://integrate.api.nvidia.com/v1",
-        max_retries: int = 3,
+        max_retries: int = 2,
     ):
         # Validate API key
         if api_key is None:
@@ -53,16 +53,7 @@ class NvidiaProvider(BaseLLMProvider):
                 "Get a key from: https://build.nvidia.com"
             )
 
-        try:
-            self.client = OpenAI(base_url=base_url, api_key=api_key)
-            # Test connection immediately
-            self.client.models.list()
-        except AuthenticationError as e:
-            raise AuthenticationErrorWrapper(f"Invalid NVIDIA API key: {e}")
-        except APIConnectionError as e:
-            raise ConnectionErrorWrapper(f"Cannot connect to NVIDIA API: {e}")
-        except Exception as e:
-            raise NvidiaProviderError(f"Failed to initialize NVIDIA provider: {e}")
+        self.client = OpenAI(base_url=base_url, api_key=api_key, timeout=120.0, max_retries=1)
 
         self.model = model
         self.temperature = temperature

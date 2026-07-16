@@ -23,7 +23,7 @@ class Agent:
         depth: int = 0,
         spawn_callback=None,        # reference to orchestrator.spawn_agent, for recursion
         approval_callback=None,     # (tool_name, arguments) -> bool, for gated tools
-        conversation_summary: str = "",  # LLM-compressed memory from previous runs
+        session_memory: str = "",
         action_tracker: ActionTracker = None,  # live action events
         skills_context: str = "",   # matched skill instructions injected into prompt
     ):
@@ -35,21 +35,22 @@ class Agent:
         self.depth = depth
         self.spawn_callback = spawn_callback
         self.approval_callback = approval_callback
-        self.conversation_summary = conversation_summary
+        self.session_memory = session_memory
         self.action_tracker = action_tracker
         self.skills_context = skills_context
         self.status = "idle"
 
-    def run(self) -> str:
-        """Executes the agent's task, actually running any tools it calls."""
+    def run(self) -> dict:
+        """Executes the agent's task. Returns dict with response and tool_calls."""
         self.status = "running"
 
         system_prompt = build_agent_system_prompt(
             self.role, self.instructions, self.tools,
-            conversation_summary=self.conversation_summary,
+            session_memory=self.session_memory,
             skills_context=self.skills_context,
         )
 
+        tool_history = []
         final_text = run_with_tools(
             llm_provider=self.llm_provider,
             system_prompt=system_prompt,
@@ -59,7 +60,11 @@ class Agent:
             approval_callback=self.approval_callback,
             action_tracker=self.action_tracker,
             agent_id=self.id,
+            tool_history=tool_history,
         )
 
         self.status = "done"
-        return final_text
+        return {
+            "response": final_text,
+            "tool_calls": tool_history,
+        }

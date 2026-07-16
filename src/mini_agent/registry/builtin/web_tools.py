@@ -4,7 +4,7 @@ registry/builtin/web_tools.py
 Web access tools. Most require the `requests` package.
 
 download_file writes to the local filesystem â€” same caution as the
-write_* tools in file_tools.py applies (gate with allowed_roles in
+write_* tools in file_tools.py applies (gate with caution in
 production; it can be pointed at any URL, including ones serving
 unexpected/large/malicious content).
 """
