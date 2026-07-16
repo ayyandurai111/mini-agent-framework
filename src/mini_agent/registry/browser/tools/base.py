@@ -20,6 +20,7 @@ logger = get_logger(__name__)
 
 class BaseTool(ABC):
     name: str = "base_tool"
+    description: str = "Base browser automation tool"
 
     def __init__(self, browser_manager: BrowserManager):
         self.browser = browser_manager

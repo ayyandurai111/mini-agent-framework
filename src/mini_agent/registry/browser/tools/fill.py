@@ -5,6 +5,7 @@ from .base import BaseTool
 
 class FillTool(BaseTool):
     name = "fill"
+    description = "Type text into an input/textarea element"
 
     async def run(self, value: str, ref: str = None, selector: str = None,
                   text: str = None, role: str = None,

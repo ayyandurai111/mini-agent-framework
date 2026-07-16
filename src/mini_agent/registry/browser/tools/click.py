@@ -5,6 +5,7 @@ from .base import BaseTool
 
 class ClickTool(BaseTool):
     name = "click"
+    description = "Click an element by ref, CSS selector, or text"
 
     async def run(self, ref: str = None, selector: str = None,
                   text: str = None, role: str = None,

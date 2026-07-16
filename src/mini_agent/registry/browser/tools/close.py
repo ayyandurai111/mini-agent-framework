@@ -5,6 +5,7 @@ from .base import BaseTool
 
 class CloseTool(BaseTool):
     name = "close"
+    description = "Close current tab or shut down the browser"
 
     async def run(self, scope: str = "tab") -> ToolResponse:
         try:

@@ -5,6 +5,7 @@ from .base import BaseTool
 
 class ReadTool(BaseTool):
     name = "read"
+    description = "Read text, HTML, or attributes from page/element"
 
     async def run(self, what: str = "text", ref: str = None,
                   selector: str = None, text: str = None,

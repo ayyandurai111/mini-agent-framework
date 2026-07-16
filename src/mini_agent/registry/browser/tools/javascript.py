@@ -5,6 +5,7 @@ from .base import BaseTool
 
 class ExecuteJSTool(BaseTool):
     name = "execute_js"
+    description = "Run JavaScript in the page context"
 
     async def run(self, code: str, timeout_ms: int = 10000) -> ToolResponse:
         try:

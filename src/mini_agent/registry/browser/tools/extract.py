@@ -5,6 +5,7 @@ from .base import BaseTool
 
 class ExtractTool(BaseTool):
     name = "extract"
+    description = "Extract structured data (tables, links, images, forms)"
 
     async def run(self, kind: str = "tables", limit: int = None) -> ToolResponse:
         try:

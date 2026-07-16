@@ -22,6 +22,10 @@ class Tool:
     read_only: bool = True
 
     def __post_init__(self):
+        if not self.name or not self.name.strip():
+            raise ValueError("Tool 'name' is required")
+        if not self.description:
+            raise ValueError(f"Tool '{self.name}' has no description")
         if self.parameters is None:
             self.parameters = self._auto_detect_parameters()
 
@@ -60,11 +64,22 @@ class Tool:
         return f"{self.name}({params_str}) - {self.description}"
 
 
+class RegistryError(Exception):
+    pass
+
+
 class ToolRegistry:
     def __init__(self):
         self._tools: Dict[str, Tool] = {}
 
     def register(self, tool: Tool):
+        if not tool.name or not tool.name.strip():
+            raise RegistryError("Tool name cannot be empty")
+        if not tool.description:
+            raise RegistryError(f"Tool '{tool.name}' has no description")
+        if tool.name in self._tools:
+            import warnings
+            warnings.warn(f"Tool '{tool.name}' already registered — overwriting")
         self._tools[tool.name] = tool
 
     def unregister(self, name: str):

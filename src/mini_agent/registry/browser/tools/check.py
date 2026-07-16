@@ -5,6 +5,7 @@ from .base import BaseTool
 
 class CheckTool(BaseTool):
     name = "check"
+    description = "Check or uncheck a checkbox/radio button"
 
     async def run(self, checked: bool = True, ref: str = None,
                   selector: str = None, text: str = None,

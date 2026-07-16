@@ -5,6 +5,7 @@ from .base import BaseTool
 
 class DialogTool(BaseTool):
     name = "dialog"
+    description = "Configure or inspect browser dialogs (alert/confirm/prompt)"
 
     async def run(self, action: str = "last", handle: str = "dismiss",
                   prompt_text: str = None) -> ToolResponse:

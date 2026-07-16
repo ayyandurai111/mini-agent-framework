@@ -8,6 +8,7 @@ from datetime import datetime
 
 class ScreenshotTool(BaseTool):
     name = "screenshot"
+    description = "Capture page or element screenshot"
 
     async def run(self, full_page: bool = False, file_name: str = None,
                   ref: str = None, selector: str = None) -> ToolResponse:

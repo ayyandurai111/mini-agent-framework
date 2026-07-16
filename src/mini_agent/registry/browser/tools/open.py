@@ -5,6 +5,7 @@ from .base import BaseTool
 
 class OpenTool(BaseTool):
     name = "open"
+    description = "Navigate to a URL in the browser"
 
     async def run(self, url: str, new_tab: bool = False,
                   wait_until: str = "domcontentloaded",

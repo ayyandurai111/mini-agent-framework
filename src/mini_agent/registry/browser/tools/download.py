@@ -7,6 +7,7 @@ import os
 
 class DownloadTool(BaseTool):
     name = "download"
+    description = "Trigger or list file downloads"
 
     async def run(self, action: str = "trigger", ref: str = None,
                   selector: str = None, timeout_ms: int = 30000) -> ToolResponse:

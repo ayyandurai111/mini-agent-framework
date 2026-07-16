@@ -5,6 +5,7 @@ from .base import BaseTool
 
 class TabsTool(BaseTool):
     name = "tabs"
+    description = "Manage browser tabs (list, open, close, switch)"
 
     async def run(self, action: str, tab_id: str = None,
                   url: str = None) -> ToolResponse:

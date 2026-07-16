@@ -5,6 +5,7 @@ from .base import BaseTool
 
 class SelectTool(BaseTool):
     name = "select"
+    description = "Select option(s) in a dropdown"
 
     async def run(self, value=None, label=None, index=None,
                   ref: str = None, selector: str = None,

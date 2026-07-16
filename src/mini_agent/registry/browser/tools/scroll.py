@@ -5,6 +5,7 @@ from .base import BaseTool
 
 class ScrollTool(BaseTool):
     name = "scroll"
+    description = "Scroll page or element into view"
 
     async def run(self, direction: str = "down", amount_px: int = 600,
                   to_bottom: bool = False, to_top: bool = False,

@@ -5,6 +5,7 @@ from .base import BaseTool
 
 class UploadTool(BaseTool):
     name = "upload"
+    description = "Upload file(s) to an input element"
 
     async def run(self, file_paths, ref: str = None,
                   selector: str = None, timeout_ms: int = 15000) -> ToolResponse:

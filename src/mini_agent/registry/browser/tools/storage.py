@@ -5,6 +5,7 @@ from .base import BaseTool
 
 class StorageTool(BaseTool):
     name = "storage"
+    description = "Manage cookies, localStorage, or sessionStorage"
 
     async def run(self, store: str = "cookies", action: str = "get",
                   key: str = None, value: str = None) -> ToolResponse:

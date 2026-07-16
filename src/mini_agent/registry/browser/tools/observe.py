@@ -17,6 +17,7 @@ ELEMENT_CATEGORIES = {
 
 class ObserveTool(BaseTool):
     name = "observe"
+    description = "Scan page for interactive elements with refs"
 
     async def run(self, max_elements: int = 250,
                   include_categories: list = None) -> ToolResponse:

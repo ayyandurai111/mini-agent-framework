@@ -19,8 +19,18 @@ class Skill:
     description: str
     file_path: str = ""
 
+    def __post_init__(self):
+        if not self.name or not self.name.strip():
+            raise ValueError("Skill 'name' is required")
+        if not self.description:
+            raise ValueError(f"Skill '{self.name}' has no description")
+
     def describe(self) -> str:
         return f"{self.name}: {self.description}"
+
+
+class RegistryError(Exception):
+    pass
 
 
 class SkillRegistry:
@@ -28,6 +38,13 @@ class SkillRegistry:
         self._skills: dict[str, Skill] = {}
 
     def register(self, skill: Skill):
+        if not skill.name or not skill.name.strip():
+            raise RegistryError("Skill name cannot be empty")
+        if not skill.description:
+            raise RegistryError(f"Skill '{skill.name}' has no description")
+        if skill.name in self._skills:
+            import warnings
+            warnings.warn(f"Skill '{skill.name}' already registered — overwriting")
         self._skills[skill.name] = skill
 
     def unregister(self, name: str):

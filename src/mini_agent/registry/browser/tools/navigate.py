@@ -5,6 +5,7 @@ from .base import BaseTool
 
 class NavigateTool(BaseTool):
     name = "navigate"
+    description = "Browser history navigation (back, forward, refresh)"
 
     async def run(self, action: str, timeout_ms: int = 15000) -> ToolResponse:
         try:

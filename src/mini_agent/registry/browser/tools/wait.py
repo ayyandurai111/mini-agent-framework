@@ -5,6 +5,7 @@ from .base import BaseTool
 
 class WaitTool(BaseTool):
     name = "wait"
+    description = "Wait for load state, element, or timeout"
 
     async def run(self, for_: str = "load_state", load_state: str = "load",
                   milliseconds: int = 1000, ref: str = None,

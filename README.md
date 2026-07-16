@@ -119,6 +119,8 @@ o.register_tools(BROWSER_TOOLS)
 
 ## Custom Tools
 
+Every tool needs `name` + `description` — these are what the LLM sees in the system prompt:
+
 ```python
 from mini_agent import Tool
 
@@ -129,6 +131,8 @@ tool = Tool(name="get_weather", description="Weather info", func=get_weather)
 orchestrator.register_tool(tool)
 ```
 
+**Validation:** `name` and `description` are required at creation — `Tool(name="", ...)` raises `ValueError` immediately. Duplicate names trigger a warning on register.
+
 Tool parameters auto-detected from function signatures. Override with explicit `parameters=` for dynamic functions. Optional hooks: `validator`, `on_error`, `requires_approval`.
 
 ## Skills
@@ -138,18 +142,14 @@ Skills are opt-in — register only if needed:
 ```python
 from mini_agent.skills import Skill
 
-# Register a built-in skill
-from mini_agent.skills import discover_package_skills
-for skill in discover_package_skills():
-    o.register_skill(skill)
-
-# Or register a custom skill
 o.register_skill(Skill(
     name="my-workflow",
     description="Standard operating procedure for X",
     file_path="./skills/my-workflow/my-workflow.md"
 ))
 ```
+
+**Validation:** Same as Tool — `name` and `description` required at creation, duplicate warning on register.
 
 ## Approval Workflow
 
@@ -190,15 +190,6 @@ Structured box-drawing output shows plan decisions, agent tool assignments, prog
 | MAX_RECURSION_DEPTH | config/settings.py | 2 | Max recursive spawning depth |
 | MEMORY_CONTEXT_TURNS | config/settings.py | 2 | Recent turns injected into main agent |
 | Default model | providers/nvidia_provider.py | mistralai/mistral-medium-3.5-128b | Override at construction |
-
-## Demo
-
-```bash
-set NVIDIA_API_KEY=nvapi-...
-python app.py
-```
-
-Interactive chatbot with all 39 tools, 2 opt-in skills, and session memory.
 
 ## Author
 
