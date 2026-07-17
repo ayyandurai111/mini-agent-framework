@@ -32,6 +32,10 @@ def _get_browser_tools():
     from .browser_tools import BROWSER_TOOLS
     return BROWSER_TOOLS
 
+def _get_init_browser():
+    from .browser_tools import init_browser
+    return init_browser
+
 BUILTIN_TOOLS = FILE_TOOLS + WEB_TOOLS + DATA_TOOLS + MATH_TOOLS + SYSTEM_TOOLS + BASH_TOOL
 
 
@@ -40,6 +44,8 @@ def __getattr__(name):
         return BUILTIN_TOOLS + _get_browser_tools()
     if name == "BROWSER_TOOLS":
         return _get_browser_tools()
+    if name == "init_browser":
+        return _get_init_browser()
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 __all__ = [
@@ -52,4 +58,5 @@ __all__ = [
     "SYSTEM_TOOLS",
     "BASH_TOOL",
     "BROWSER_TOOLS",
+    "init_browser",
 ]
