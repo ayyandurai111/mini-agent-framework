@@ -15,8 +15,9 @@ class ConversationMemory:
     def add_turn(self, user_input: str, plan: dict, agents: list, result: str):
         formatted = self._format(user_input, plan, agents, result)
         self._turns.append(formatted)
-        while len(self._turns) > self._max_turns:
-            self._turns.pop(0)
+        if self._max_turns > 0:
+            while len(self._turns) > self._max_turns:
+                self._turns.pop(0)
         self._save()
 
     def get_context(self) -> str:

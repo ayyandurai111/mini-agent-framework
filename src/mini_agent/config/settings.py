@@ -17,9 +17,12 @@ MAX_RECURSION_DEPTH = 2
 # to give a final answer (prevents infinite tool-calling loops)
 MAX_TOOL_ITERATIONS = 5
 
-# Max number of conversation turns retained in memory.
+# Max number of conversation turns retained in memory (for non-session usage).
 # Only the last N are passed to the main agent for context.
 MEMORY_MAX_TURNS = 5
+
+# Max turns stored per session (0 = unlimited). SessionManager uses this.
+SESSION_MAX_TURNS = 0
 
 # Number of recent turns included in the prompt for agent context.
 MEMORY_CONTEXT_TURNS = 2

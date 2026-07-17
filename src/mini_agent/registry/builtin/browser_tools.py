@@ -157,9 +157,9 @@ def browser_scroll(direction: str = "down", amount_px: int = 600,
 def browser_wait(for_: str = "load_state", load_state: str = "load",
                  milliseconds: int = 1000, ref: str = None,
                  selector: str = None, timeout_ms: int = 30000) -> str:
-    return _browser_call("wait", **{"for": for_, "load_state": load_state,
-                         "milliseconds": milliseconds, "ref": ref,
-                         "selector": selector, "timeout_ms": timeout_ms})
+    return _browser_call("wait", for_=for_, load_state=load_state,
+                         milliseconds=milliseconds, ref=ref,
+                         selector=selector, timeout_ms=timeout_ms)
 
 
 def browser_navigate(action: str, timeout_ms: int = 15000) -> str:

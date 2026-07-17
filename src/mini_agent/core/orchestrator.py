@@ -14,6 +14,7 @@ from .agent import Agent
 from .tool_loop import run_with_tools
 from .utils.json_utils import try_parse_json
 from .memory.conversation import ConversationMemory
+from .session_manager import SessionManager
 from ..registry.tools import ToolRegistry
 from ..prompts.orchestrator_prompt import ORCHESTRATOR_SYSTEM_PROMPT
 from ..config.settings import MAX_AGENTS, MAX_RECURSION_DEPTH
@@ -23,7 +24,8 @@ from ..skills import Skill, SkillRegistry, read_skill_content
 class Orchestrator:
     def __init__(self, llm_provider: BaseLLMProvider, max_agents: int = MAX_AGENTS,
                  approval_callback=None, memory_file: str = None,
-                 action_tracker: ActionTracker = None):
+                 action_tracker: ActionTracker = None,
+                 session_manager: SessionManager = None):
         if llm_provider is None:
             raise ValueError(
                 "llm_provider is required. Implement BaseLLMProvider and pass an instance."
@@ -32,18 +34,18 @@ class Orchestrator:
         self.max_agents = max_agents
         self.tool_registry = ToolRegistry()
         self.active_agents = {}
-        # approval_callback: (tool_name, arguments) -> bool. If set, any Tool
-        # with requires_approval=True will ask before running (see core/approval.py).
         self.approval_callback = approval_callback
-        # Live action event tracker â€” emits plan, agent, tool events
         self.action_tracker = action_tracker or ActionTracker(on_event=console_event_logger)
         self.skill_registry = SkillRegistry()
-        # Session memory - stores raw-text conversation turns for context
-        self.conversation_memory = (
-            ConversationMemory(persist_file=memory_file)
-            if memory_file
-            else ConversationMemory()
-        )
+        self.session_manager = session_manager
+        if session_manager:
+            self.conversation_memory = None
+        else:
+            self.conversation_memory = (
+                ConversationMemory(persist_file=memory_file)
+                if memory_file
+                else ConversationMemory()
+            )
 
     def register_tool(self, tool):
         """Register a single custom tool."""
@@ -65,6 +67,24 @@ class Orchestrator:
         """Load all .md skill files from a directory."""
         for skill in self.skill_registry.load_from_dir(directory):
             self.skill_registry.register(skill)
+
+    def _get_memory(self, session_id=None):
+        """Resolve the appropriate ConversationMemory from session or default."""
+        if self.session_manager:
+            if session_id:
+                return session_id, self.session_manager.get_session(session_id)
+            sid, memory = self.session_manager.get_or_create_active()
+            return sid, memory
+        return None, self.conversation_memory
+
+    def _build_chat_system_prompt(self, context: str) -> str:
+        parts = [
+            "You are a helpful AI assistant. Answer the user's questions "
+            "conversationally. Be concise and accurate."
+        ]
+        if context:
+            parts.append(f"\n\n## CONVERSATION HISTORY\n{context}")
+        return "\n".join(parts)
 
     def _build_skills_context(self, skills: List[Skill]) -> str:
         if not skills:
@@ -254,14 +274,17 @@ class Orchestrator:
                         self.action_tracker.on_agent_end(agent_map[idx], sub_tasks[idx].get("role", "worker"), f"Agent error: {exc}")
         return agents_data, results
 
-    def run(self, task: str) -> dict:
+    def run(self, task: str, session_id: str = None) -> dict:
         self.active_agents.clear()
+        sid, memory = self._get_memory(session_id)
 
-        plan = self._plan(task, session_memory=self.conversation_memory.get_context())
+        plan = self._plan(task, session_memory=memory.get_context())
 
         if "final_answer" in plan:
             answer = plan["final_answer"]
-            self.conversation_memory.add_turn(task, plan, [], answer)
+            memory.add_turn(task, plan, [], answer)
+            if self.session_manager and sid:
+                self.session_manager.touch_session(sid)
             return {"final_answer": answer, "sub_agent_results": {}}
 
         matched_skills = self._match_skills(task)
@@ -275,7 +298,7 @@ class Orchestrator:
                 capability_names=capability_names,
                 skills_context=skills_context,
                 skill_names=[s.name for s in matched_skills],
-                session_memory=self.conversation_memory.get_context(),
+                session_memory=memory.get_context(),
             )
             try:
                 result = agent.run()
@@ -289,7 +312,9 @@ class Orchestrator:
                 "response": response_text,
                 "tool_calls": result.get("tool_calls", []),
             }]
-            self.conversation_memory.add_turn(task, plan, agents_data, response_text)
+            memory.add_turn(task, plan, agents_data, response_text)
+            if self.session_manager and sid:
+                self.session_manager.touch_session(sid)
             return {"final_answer": response_text, "sub_agent_results": {agent.id: response_text}}
 
         sub_tasks = plan.get("sub_tasks", [])[: self.max_agents]
@@ -297,8 +322,54 @@ class Orchestrator:
 
         self.action_tracker.on_aggregate(task)
         final_answer = self._aggregate(task, results)
-        self.conversation_memory.add_turn(task, plan, agents_data, final_answer)
+        memory.add_turn(task, plan, agents_data, final_answer)
+        if self.session_manager and sid:
+            self.session_manager.touch_session(sid)
         return {"final_answer": final_answer, "sub_agent_results": results}
+
+    def chat(self, message: str, session_id: str = None) -> str:
+        """Multi-turn chat within a session. Returns the response text."""
+        result = self.run(message, session_id=session_id)
+        return result.get("final_answer", "")
+
+    def chat_stream(self, message: str, session_id: str = None):
+        """Stream a chat response. Yields event dicts with type and content.
+
+        Events:
+            {"type": "start",    "session_id": ...}
+            {"type": "token",    "content": "partial text"}
+            {"type": "error",    "content": "error message"}
+            {"type": "done",     "session_id": ..., "content": "full response"}
+        """
+        sid = None
+        if self.session_manager:
+            if session_id:
+                sid = session_id
+                memory = self.session_manager.get_session(sid)
+            else:
+                sid, memory = self.session_manager.get_or_create_active()
+        else:
+            memory = self.conversation_memory
+
+        context = memory.get_context()
+        system_prompt = self._build_chat_system_prompt(context)
+
+        yield {"type": "start", "session_id": sid}
+        full_response = ""
+        try:
+            for token in self.llm_provider.generate_stream(system_prompt, message):
+                full_response += token
+                yield {"type": "token", "content": token}
+        except Exception as e:
+            yield {"type": "error", "content": str(e)}
+            return
+
+        memory.add_turn(message, {"needs_sub_agents": False}, [], full_response)
+
+        if self.session_manager and sid:
+            self.session_manager.touch_session(sid)
+
+        yield {"type": "done", "session_id": sid, "content": full_response}
 
     def _aggregate(self, original_task: str, results: dict) -> str:
         if not results:
