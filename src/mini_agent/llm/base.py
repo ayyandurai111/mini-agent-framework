@@ -1,7 +1,7 @@
 """
 llm/base.py
-------------
-Abstract base class for LLM providers. All providers must implement generate().
+-----------
+Abstract base class for LLM providers. All providers must implement generate_stream().
 """
 
 from abc import ABC, abstractmethod
@@ -9,22 +9,22 @@ from abc import ABC, abstractmethod
 
 class BaseLLMProvider(ABC):
     """
-    Any LLM provider must inherit this class and implement generate().
+    Any LLM provider must inherit this class and implement generate_stream().
+    generate() is a convenience wrapper that accumulates stream tokens.
     """
 
-    @abstractmethod
     def generate(self, system_prompt: str, user_message: str) -> str:
         """
-        system_prompt : role & instructions for the caller (orchestrator/agent)
-        user_message  : the task/question being asked
-        return        : the LLM's reply as plain text
+        Accumulates tokens from generate_stream() and returns full response.
         """
-        raise NotImplementedError
+        return "".join(self.generate_stream(system_prompt, user_message))
 
+    @abstractmethod
     def generate_stream(self, system_prompt: str, user_message: str):
         """
         Generator that yields response tokens incrementally.
-        Default implementation yields the full response as a single token.
-        Override in subclass for true token-by-token streaming.
+        Subclasses must implement this with stream=True.
         """
-        yield self.generate(system_prompt, user_message)
+        if False:
+            yield
+        raise NotImplementedError

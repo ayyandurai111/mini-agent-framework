@@ -78,56 +78,6 @@ class NvidiaProvider(BaseLLMProvider):
         self.max_tokens = max_tokens
         self.max_retries = max_retries
 
-    def generate(self, system_prompt: str, user_message: str) -> str:
-        last_error = None
-        for attempt in range(self.max_retries):
-            try:
-                completion = self.client.chat.completions.create(
-                    model=self.model,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_message},
-                    ],
-                    temperature=self.temperature,
-                    top_p=self.top_p,
-                    max_tokens=self.max_tokens,
-                    stream=False,
-                )
-                return completion.choices[0].message.content
-            except AuthenticationError as e:
-                raise AuthenticationErrorWrapper(f"API key authentication failed: {e}")
-            except RateLimitError as e:
-                last_error = e
-                wait_time = 2 ** attempt
-                if attempt < self.max_retries - 1:
-                    time.sleep(wait_time)
-            except APIConnectionError as e:
-                last_error = e
-                if attempt < self.max_retries - 1:
-                    time.sleep(1)
-            except APIError as e:
-                last_error = e
-                if attempt < self.max_retries - 1:
-                    time.sleep(1)
-            except Exception as e:
-                raise NvidiaProviderError(f"Unexpected error during generation: {e}")
-
-        # All retries exhausted
-        if isinstance(last_error, RateLimitError):
-            raise RateLimitErrorWrapper(
-                f"NVIDIA API rate limit exceeded after {self.max_retries} attempts. "
-                "Wait a moment and try again, or reduce concurrent requests."
-            )
-        elif isinstance(last_error, APIConnectionError):
-            raise ConnectionErrorWrapper(
-                f"Connection to NVIDIA API failed after {self.max_retries} attempts. "
-                "Check your internet connection."
-            )
-        else:
-            raise NvidiaProviderError(
-                f"LLM generation failed after {self.max_retries} attempts: {last_error}"
-            )
-
     def generate_stream(self, system_prompt: str, user_message: str):
         last_error = None
         for attempt in range(self.max_retries):

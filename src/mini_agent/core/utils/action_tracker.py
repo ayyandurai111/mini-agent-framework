@@ -61,6 +61,10 @@ class ActionTracker:
     def on_tool_result(self, agent_id: str, tool: str, result: str):
         self.emit("tool_result", {"agent_id": agent_id, "tool": tool, "result": result})
 
+    def on_token(self, token: str, agent_id: str = ""):
+        """Emitted for each streamed token. Default logger does not print to avoid noise."""
+        self.emit("token", {"token": token, "agent_id": agent_id})
+
     def on_aggregate(self, task: str):
         self.emit("aggregate", {"task": task})
 

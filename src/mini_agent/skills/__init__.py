@@ -144,7 +144,8 @@ def load_skills_from_dir(directory: str) -> List[Skill]:
 _PACKAGE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
-def discover_package_skills() -> List[Skill]:
+def discover_package_skills() -> "List[Skill]":
+    """Auto-discover all skill subdirectories inside the skills package dir."""
     """Auto-discover all skill subdirectories inside the skills package dir."""
     skills = []
     for entry in sorted(os.listdir(_PACKAGE_DIR)):

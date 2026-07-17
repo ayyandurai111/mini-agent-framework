@@ -328,18 +328,10 @@ class Orchestrator:
         return {"final_answer": final_answer, "sub_agent_results": results}
 
     def chat(self, message: str, session_id: str = None) -> str:
-        """Multi-turn chat within a session. Returns the response text."""
-        result = self.run(message, session_id=session_id)
-        return result.get("final_answer", "")
+        """Streams tokens directly to console and returns the full response string.
 
-    def chat_stream(self, message: str, session_id: str = None):
-        """Stream a chat response. Yields event dicts with type and content.
-
-        Events:
-            {"type": "start",    "session_id": ...}
-            {"type": "token",    "content": "partial text"}
-            {"type": "error",    "content": "error message"}
-            {"type": "done",     "session_id": ..., "content": "full response"}
+        Usage:
+            result = orch.chat("hello")  # live output, no loop needed
         """
         sid = None
         if self.session_manager:
@@ -354,22 +346,23 @@ class Orchestrator:
         context = memory.get_context()
         system_prompt = self._build_chat_system_prompt(context)
 
-        yield {"type": "start", "session_id": sid}
         full_response = ""
         try:
             for token in self.llm_provider.generate_stream(system_prompt, message):
+                print(token, end="", flush=True)
+                self.action_tracker.on_token(token, agent_id="chat")
                 full_response += token
-                yield {"type": "token", "content": token}
         except Exception as e:
-            yield {"type": "error", "content": str(e)}
-            return
+            print(f"\n[Error: {e}]")
+            return ""
 
+        print()
         memory.add_turn(message, {"needs_sub_agents": False}, [], full_response)
 
         if self.session_manager and sid:
             self.session_manager.touch_session(sid)
 
-        yield {"type": "done", "session_id": sid, "content": full_response}
+        return full_response
 
     def _aggregate(self, original_task: str, results: dict) -> str:
         if not results:
