@@ -22,6 +22,12 @@ from .exceptions import (
     BrowserTimeoutError,
     TabNotFoundError,
 )
+try:
+    from playwright_stealth import stealth_sync
+    _STEALTH_AVAILABLE = True
+except ImportError:
+    _STEALTH_AVAILABLE = False
+
 from .logger import get_logger
 
 logger = get_logger(__name__)
@@ -77,8 +83,10 @@ class BrowserManager:
         slow_mo_ms: int = 0,
         extra_launch_args: Optional[List[str]] = None,
         proxy: Optional[Dict[str, str]] = None,
+        stealth: bool = True,
     ):
         self.headless = headless
+        self.stealth = stealth
         self.browser_type = browser_type
         self.downloads_dir = os.path.abspath(downloads_dir)
         self.screenshots_dir = os.path.abspath(screenshots_dir)
@@ -167,6 +175,11 @@ class BrowserManager:
     async def open_tab(self, url: Optional[str] = None) -> str:
         self._ensure_started()
         page = await self._context.new_page()
+        if self.stealth:
+            if _STEALTH_AVAILABLE:
+                await stealth_sync(page)
+            else:
+                logger.warning("Stealth enabled but playwright_stealth not installed. Run: pip install playwright-stealth")
         self._tab_counter += 1
         tab_id = f"tab-{self._tab_counter}"
         state = TabState(page=page, tab_id=tab_id)

@@ -29,9 +29,10 @@ _agent = None
 _loop = None
 _IMPORT_ERROR = None
 _headless_mode = True
+_stealth_mode = True
 
 
-def init_browser(headless: bool = True):
+def init_browser(headless: bool = True, stealth: bool = True):
     """Configure browser mode before registering BROWSER_TOOLS.
 
     Call BEFORE register_tools(BROWSER_TOOLS), or to restart with a
@@ -42,8 +43,11 @@ def init_browser(headless: bool = True):
     headless : bool
         True  → invisible browser (default)
         False → visible GUI window
+    stealth : bool
+        True  → enable Playwright stealth (avoids bot detection, default)
+        False → disable stealth (debugging)
     """
-    global _headless_mode, _agent, _loop
+    global _headless_mode, _stealth_mode, _agent, _loop
     if _agent is not None:
         try:
             _loop.run_until_complete(_agent._manager.shutdown())
@@ -52,6 +56,7 @@ def init_browser(headless: bool = True):
         _agent = None
         _loop = None
     _headless_mode = headless
+    _stealth_mode = stealth
 
 
 def _auto_install_chromium():
@@ -90,7 +95,7 @@ def _ensure_browser():
         try:
             _loop = asyncio.new_event_loop()
             asyncio.set_event_loop(_loop)
-            _agent = BrowserSession(headless=_headless_mode)
+            _agent = BrowserSession(headless=_headless_mode, stealth=_stealth_mode)
             _loop.run_until_complete(_agent.start())
         except Exception as e:
             error_msg = str(e).lower()
@@ -99,7 +104,7 @@ def _ensure_browser():
                     _auto_install_chromium()
                     _loop = asyncio.new_event_loop()
                     asyncio.set_event_loop(_loop)
-                    _agent = BrowserSession(headless=_headless_mode)
+                    _agent = BrowserSession(headless=_headless_mode, stealth=_stealth_mode)
                     _loop.run_until_complete(_agent.start())
                     return
                 except Exception as retry_err:

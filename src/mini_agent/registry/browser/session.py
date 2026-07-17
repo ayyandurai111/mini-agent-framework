@@ -23,6 +23,7 @@ class BrowserSession:
         default_timeout_ms: int = 30_000,
         slow_mo_ms: int = 0,
         proxy: Optional[Dict[str, str]] = None,
+        stealth: bool = True,
     ):
         self._manager = BrowserManager(
             headless=headless,
@@ -34,6 +35,7 @@ class BrowserSession:
             default_timeout_ms=default_timeout_ms,
             slow_mo_ms=slow_mo_ms,
             proxy=proxy,
+            stealth=stealth,
         )
         self._registry = ToolRegistry(self._manager)
         self._started = False
