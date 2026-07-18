@@ -17,7 +17,7 @@ from .memory.conversation import ConversationMemory
 from .session_manager import SessionManager
 from ..registry.tools import ToolRegistry
 from ..prompts.orchestrator_prompt import ORCHESTRATOR_SYSTEM_PROMPT
-from ..config.settings import MAX_AGENTS, MAX_RECURSION_DEPTH
+from ..config.settings import MAX_AGENTS, MAX_RECURSION_DEPTH, SUMMARIZE_EVERY_N_TURNS
 from ..skills import Skill, SkillRegistry, read_skill_content
 
 
@@ -69,13 +69,64 @@ class Orchestrator:
             self.skill_registry.register(skill)
 
     def _get_memory(self, session_id=None):
-        """Resolve the appropriate ConversationMemory from session or default."""
+        """Resolve ConversationMemory + LongTermMemory from session or default."""
         if self.session_manager:
             if session_id:
-                return session_id, self.session_manager.get_session(session_id)
-            sid, memory = self.session_manager.get_or_create_active()
-            return sid, memory
-        return None, self.conversation_memory
+                mem = self.session_manager.get_session(session_id)
+                ltm = self.session_manager.get_long_term_memory(session_id)
+                return session_id, mem, ltm
+            sid, mem = self.session_manager.get_or_create_active()
+            ltm = self.session_manager.get_long_term_memory(sid)
+            return sid, mem, ltm
+        return None, self.conversation_memory, None
+
+    def _summarize_memory(self, memory: ConversationMemory, ltm) -> None:
+        """Summarize recent turns + extract rules via LLM."""
+        if ltm is None:
+            return
+        last_summarized = getattr(ltm, '_last_summarized_turn', 0)
+        turns = memory.raw_turns()
+        if len(turns) <= last_summarized:
+            ltm._last_summarized_turn = len(turns)
+            return
+        new_turns = turns[last_summarized:]
+        if not new_turns:
+            return
+        turn_text = "\n\n---\n\n".join(
+            f"Turn {last_summarized + i + 1}:\n{t}"
+            for i, t in enumerate(new_turns)
+        )
+        prompt = (
+            "You are a memory summarization assistant. Analyze the conversation turns below "
+            "and produce:\n"
+            "1. A concise summary of what happened (key decisions, results, topics covered).\n"
+            "2. A list of user rules extracted from the conversation — these are the user's "
+            "stated preferences, role constraints, or requirements. Each rule should be "
+            'a single clear sentence starting with "The user".\n\n'
+            "Output format (JSON only, no other text):\n"
+            '{"summary": "<concise summary>", '
+            '"rules": [{"rule": "The user...", "category": "preference|role|constraint|general"}, ...]}\n\n'
+            f"Turns to process:\n{turn_text}"
+        )
+        try:
+            raw = self.llm_provider.generate(
+                system_prompt="You are a memory summarization assistant.",
+                user_message=prompt,
+            )
+            import json
+            result = json.loads(raw.strip().removeprefix("```json").removesuffix("```").strip())
+        except Exception:
+            result = {"summary": "", "rules": []}
+        summary = result.get("summary", "")
+        rules = result.get("rules", [])
+        if summary:
+            ltm.add_summary([last_summarized, len(turns) - 1], summary)
+        if rules:
+            ltm.add_rules(rules, len(turns) - 1)
+        ltm._last_summarized_turn = len(turns)
+        rules_text = ltm.get_rules_text()
+        summary_text = ltm.get_latest_summary() or ""
+        memory.inject_long_term(rules_text=rules_text, summary_text=summary_text)
 
     def _build_chat_system_prompt(self, context: str) -> str:
         parts = [
@@ -276,7 +327,14 @@ class Orchestrator:
 
     def run(self, task: str, session_id: str = None) -> dict:
         self.active_agents.clear()
-        sid, memory = self._get_memory(session_id)
+        sid, memory, ltm = self._get_memory(session_id)
+
+        rules_text = ltm.get_rules_text() if ltm else ""
+        summary_text = ltm.get_latest_summary() or "" if ltm else ""
+        memory.inject_long_term(rules_text=rules_text, summary_text=summary_text)
+        memory.set_summarize_callback(
+            lambda mem: self._summarize_memory(mem, ltm) if ltm else None
+        )
 
         plan = self._plan(task, session_memory=memory.get_context())
 
@@ -334,14 +392,24 @@ class Orchestrator:
             result = orch.chat("hello")  # live output, no loop needed
         """
         sid = None
+        ltm = None
         if self.session_manager:
             if session_id:
                 sid = session_id
                 memory = self.session_manager.get_session(sid)
+                ltm = self.session_manager.get_long_term_memory(sid)
             else:
                 sid, memory = self.session_manager.get_or_create_active()
+                ltm = self.session_manager.get_long_term_memory(sid)
         else:
             memory = self.conversation_memory
+
+        rules_text = ltm.get_rules_text() if ltm else ""
+        summary_text = ltm.get_latest_summary() or "" if ltm else ""
+        memory.inject_long_term(rules_text=rules_text, summary_text=summary_text)
+        memory.set_summarize_callback(
+            lambda mem: self._summarize_memory(mem, ltm) if ltm else None
+        )
 
         context = memory.get_context()
         system_prompt = self._build_chat_system_prompt(context)

@@ -27,6 +27,13 @@ SESSION_MAX_TURNS = 0
 # Number of recent turns included in the prompt for agent context.
 MEMORY_CONTEXT_TURNS = 2
 
+# Maximum token budget for building compressed context from session memory.
+# Rules > summary > recent turns are prioritized within this budget.
+MAX_CONTEXT_TOKENS = 4000
+
+# Summarize long-term memory every N turns.
+SUMMARIZE_EVERY_N_TURNS = 5
+
 
 def get_default_memory_dir() -> str:
     """Platform-appropriate directory for session files."""

@@ -7,19 +7,19 @@ class NavigateTool(BaseTool):
     name = "navigate"
     description = "Browser history navigation (back, forward, refresh)"
 
-    async def run(self, action: str, timeout_ms: int = 15000) -> ToolResponse:
+    def run(self, action: str, timeout_ms: int = 15000) -> ToolResponse:
         try:
-            page = self.get_page()
+            driver = self.get_driver()
             if action == "back":
-                await page.go_back(timeout=timeout_ms)
+                driver.back()
             elif action == "forward":
-                await page.go_forward(timeout=timeout_ms)
+                driver.forward()
             elif action == "refresh" or action == "reload":
-                await page.reload(timeout=timeout_ms)
+                driver.refresh()
             else:
                 raise InvalidToolParamsError(f"Unknown navigation action '{action}'. Use: back, forward, refresh")
             return ToolResponse.ok(tool=self.name, message=f"Navigation '{action}' completed",
-                                    data={"action": action, "url": page.url})
+                                   data={"action": action, "url": driver.current_url})
         except (InvalidToolParamsError, NavigationError):
             raise
         except Exception as exc:

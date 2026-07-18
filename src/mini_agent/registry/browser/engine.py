@@ -1,23 +1,16 @@
 from __future__ import annotations
 
-import asyncio
 import os
-import subprocess
 import sys
 import uuid
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from playwright.async_api import (
-    async_playwright,
-    Browser,
-    BrowserContext,
-    Dialog,
-    Download,
-    Page,
-    Playwright,
-    TimeoutError as PlaywrightTimeoutError,
-)
+import undetected_chromedriver as uc
+from selenium.webdriver.common.by import By
+from selenium.webdriver.remote.webelement import WebElement
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
 
 from .exceptions import (
     BrowserNotStartedError,
@@ -27,56 +20,33 @@ from .exceptions import (
 
 from .logger import get_logger
 
-_STEALTH_AVAILABLE = False
-_stealth_sync_fn = None
-
-
-def _ensure_stealth() -> bool:
-    global _STEALTH_AVAILABLE, _stealth_sync_fn
-    if _STEALTH_AVAILABLE:
-        return True
-    try:
-        from playwright_stealth import stealth_sync
-        _stealth_sync_fn = stealth_sync
-        _STEALTH_AVAILABLE = True
-        return True
-    except ImportError:
-        pass
-    try:
-        logger.info("Installing playwright-stealth (one-time)...")
-        result = subprocess.run(
-            [sys.executable, "-m", "pip", "install", "playwright-stealth"],
-            capture_output=True, text=True, timeout=60,
-        )
-        if result.returncode != 0:
-            stderr = result.stderr.strip()
-            logger.warning(f"playwright-stealth install failed: {stderr or 'unknown error'}")
-            return False
-        from playwright_stealth import stealth_sync
-        _stealth_sync_fn = stealth_sync
-        _STEALTH_AVAILABLE = True
-        logger.info("playwright-stealth installed successfully.")
-        return True
-    except Exception as exc:
-        logger.warning(f"playwright-stealth install error: {exc}")
-        return False
-
 logger = get_logger(__name__)
 
 DEFAULT_VIEWPORT = {"width": 1366, "height": 768}
 DEFAULT_TIMEOUT_MS = 30_000
 
-CLOUD_SAFE_LAUNCH_ARGS = [
+UC_OPTIONS = [
     "--no-sandbox",
     "--disable-setuid-sandbox",
     "--disable-dev-shm-usage",
     "--disable-gpu",
     "--disable-extensions",
     "--disable-background-networking",
-    "--log-level=3",
-    "--silent",
-    "--disable-logging",
+    "--disable-blink-features=AutomationControlled",
 ]
+
+INIT_SCRIPT = """
+Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+window.chrome = { runtime: {} };
+const originalQuery = window.navigator.permissions.query;
+window.navigator.permissions.query = (params) => (
+    params.name === 'notifications'
+        ? Promise.resolve({ state: 'denied' })
+        : originalQuery(params)
+);
+"""
 
 
 @dataclass
@@ -97,7 +67,7 @@ class DialogRecord:
 
 @dataclass
 class TabState:
-    page: Page
+    handle: str
     tab_id: str
     dialog_policy: DialogPolicy = field(default_factory=DialogPolicy)
     last_dialog: Optional[DialogRecord] = None
@@ -108,155 +78,217 @@ class BrowserManager:
     def __init__(
         self,
         headless: bool = True,
-        browser_type: str = "chromium",
         downloads_dir: str = "./downloads",
         screenshots_dir: str = "./screenshots",
         viewport: Optional[Dict[str, int]] = None,
         user_agent: Optional[str] = None,
         default_timeout_ms: int = DEFAULT_TIMEOUT_MS,
-        slow_mo_ms: int = 0,
         extra_launch_args: Optional[List[str]] = None,
         proxy: Optional[Dict[str, str]] = None,
-        stealth: bool = True,
+        version_main: Optional[int] = None,
     ):
         self.headless = headless
-        self.stealth = stealth
-        self.browser_type = browser_type
         self.downloads_dir = os.path.abspath(downloads_dir)
         self.screenshots_dir = os.path.abspath(screenshots_dir)
         self.viewport = viewport or DEFAULT_VIEWPORT
         self.user_agent = user_agent
         self.default_timeout_ms = default_timeout_ms
-        self.slow_mo_ms = slow_mo_ms
-        self.launch_args = extra_launch_args or CLOUD_SAFE_LAUNCH_ARGS
+        self.launch_args = extra_launch_args or UC_OPTIONS
         self.proxy = proxy
+        self.version_main = version_main or self._detect_chrome_version()
 
-        self._playwright: Optional[Playwright] = None
-        self._browser: Optional[Browser] = None
-        self._context: Optional[BrowserContext] = None
+        self._driver: Optional[uc.Chrome] = None
         self._tabs: Dict[str, TabState] = {}
         self._active_tab_id: Optional[str] = None
         self._tab_counter = 0
         self._downloads: List[Dict[str, Any]] = []
-        self._start_lock = asyncio.Lock()
 
-    async def start(self) -> None:
-        async with self._start_lock:
-            if self._browser is not None:
-                return
-
-            os.makedirs(self.downloads_dir, exist_ok=True)
-            os.makedirs(self.screenshots_dir, exist_ok=True)
-
-            self._playwright = await async_playwright().start()
-            launcher = getattr(self._playwright, self.browser_type)
-
-            launch_kwargs: Dict[str, Any] = dict(
-                headless=self.headless,
-                args=self.launch_args,
-                slow_mo=self.slow_mo_ms,
-            )
-            if self.proxy:
-                launch_kwargs["proxy"] = self.proxy
-
-            self._browser = await launcher.launch(**launch_kwargs)
-            self._context = await self._browser.new_context(
-                viewport=self.viewport,
-                user_agent=self.user_agent,
-                accept_downloads=True,
-            )
-            self._context.set_default_timeout(self.default_timeout_ms)
-            self._context.set_default_navigation_timeout(self.default_timeout_ms)
-
-            await self.open_tab()
-            logger.info(
-                "Browser started (engine=%s, headless=%s, viewport=%s)",
-                self.browser_type,
-                self.headless,
-                self.viewport,
-            )
-
-    async def shutdown(self) -> None:
+    @staticmethod
+    def _detect_chrome_version() -> int:
         try:
-            if self._context is not None:
-                await self._context.close()
+            import winreg
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Google\Chrome\BLBeacon")
+            version = winreg.QueryValueEx(key, "version")[0]
+            return int(version.split(".")[0])
         except Exception:
-            logger.exception("Error closing browser context")
+            pass
         try:
-            if self._browser is not None:
-                await self._browser.close()
+            import subprocess
+            result = subprocess.run(
+                [r"C:\Program Files\Google\Chrome\Application\chrome.exe", "--version"],
+                capture_output=True, text=True, timeout=5,
+            )
+            if result.returncode == 0:
+                part = result.stdout.strip().split()[-1]
+                return int(part.split(".")[0])
         except Exception:
-            logger.exception("Error closing browser")
-        try:
-            if self._playwright is not None:
-                await self._playwright.stop()
-        except Exception:
-            logger.exception("Error stopping playwright")
+            pass
+        return 0
 
-        self._browser = None
-        self._context = None
-        self._playwright = None
+    # ------------------------------------------------------------------
+    # Lifecycle
+    # ------------------------------------------------------------------
+
+    def start(self) -> None:
+        if self._driver is not None:
+            return
+
+        os.makedirs(self.downloads_dir, exist_ok=True)
+        os.makedirs(self.screenshots_dir, exist_ok=True)
+
+        options = uc.ChromeOptions()
+        for arg in self.launch_args:
+            options.add_argument(arg)
+
+        options.add_argument(f"--window-size={self.viewport['width']},{self.viewport['height']}")
+
+        prefs = {
+            "download.default_directory": self.downloads_dir,
+            "download.prompt_for_download": False,
+            "download.directory_upgrade": True,
+            "safebrowsing.enabled": True,
+        }
+        options.add_experimental_option("prefs", prefs)
+
+        if self.user_agent:
+            options.add_argument(f"--user-agent={self.user_agent}")
+
+        if self.proxy:
+            proxy_str = self.proxy.get("server", "")
+            if proxy_str:
+                options.add_argument(f"--proxy-server={proxy_str}")
+
+        self._driver = uc.Chrome(options=options, version_main=self.version_main)
+
+        self._driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
+            "source": INIT_SCRIPT,
+        })
+
+        self.open_tab()
+
+        logger.info(
+            "Browser started (engine=undetected-chromedriver, headless=%s, viewport=%s)",
+            self.headless,
+            self.viewport,
+        )
+
+    def shutdown(self) -> None:
+        try:
+            if self._driver is not None:
+                self._driver.quit()
+        except Exception:
+            logger.exception("Error shutting down browser")
+
+        self._driver = None
         self._tabs.clear()
         self._active_tab_id = None
         logger.info("Browser shut down")
 
     def _ensure_started(self) -> None:
-        if self._context is None:
+        if self._driver is None:
             raise BrowserNotStartedError(
                 "Browser has not been started. Call agent.start() first."
             )
 
-    async def open_tab(self, url: Optional[str] = None) -> str:
+    # ------------------------------------------------------------------
+    # Tab management
+    # ------------------------------------------------------------------
+
+    def open_tab(self, url: Optional[str] = None) -> str:
         self._ensure_started()
-        page = await self._context.new_page()
-        if self.stealth and _ensure_stealth():
-            await _stealth_sync_fn(page)
+
+        if self._active_tab_id is not None:
+            self._driver.execute_script("window.open('');")
+            handles = self._driver.window_handles
+            handle = handles[-1]
+            self._driver.switch_to.window(handle)
+        else:
+            handle = self._driver.current_window_handle
+
         self._tab_counter += 1
         tab_id = f"tab-{self._tab_counter}"
-        state = TabState(page=page, tab_id=tab_id)
+        state = TabState(handle=handle, tab_id=tab_id)
         self._tabs[tab_id] = state
-
-        page.on("dialog", self._make_dialog_handler(tab_id))
-        page.on("download", self._make_download_handler(tab_id))
-
         self._active_tab_id = tab_id
+
         if url:
-            await page.goto(url, wait_until="domcontentloaded")
+            self._driver.get(url)
+
         logger.info("Opened tab %s%s", tab_id, f" -> {url}" if url else "")
         return tab_id
 
-    async def close_tab(self, tab_id: Optional[str] = None) -> str:
+    def close_tab(self, tab_id: Optional[str] = None) -> str:
         self._ensure_started()
         target_id = tab_id or self._active_tab_id
         state = self._get_tab(target_id)
-        await state.page.close()
+
+        self._driver.switch_to.window(state.handle)
+        self._driver.execute_script("window.close();")
+
         del self._tabs[target_id]
         logger.info("Closed tab %s", target_id)
 
         if self._active_tab_id == target_id:
-            self._active_tab_id = next(iter(self._tabs), None)
-            if self._active_tab_id is None:
-                await self.open_tab()
+            remaining_handles = self._driver.window_handles
+            if remaining_handles:
+                first = remaining_handles[0]
+                self._driver.switch_to.window(first)
+                self._active_tab_id = next(
+                    (tid for tid, s in self._tabs.items() if s.handle == first),
+                    None
+                )
+                if self._active_tab_id is None:
+                    self._active_tab_id = next(iter(self._tabs), None)
+            else:
+                self._active_tab_id = None
+                self.open_tab()
+
         return self._active_tab_id
 
-    async def switch_tab(self, tab_id: str) -> str:
+    def switch_tab(self, tab_id: str) -> str:
         self._ensure_started()
-        state = self._get_tab(tab_id)
-        await state.page.bring_to_front()
+        self._switch_to_tab(tab_id)
         self._active_tab_id = tab_id
         return tab_id
 
+    def _switch_to_tab(self, tab_id: str) -> None:
+        state = self._get_tab(tab_id)
+        self._driver.switch_to.window(state.handle)
+
     def list_tabs(self) -> List[Dict[str, Any]]:
         self._ensure_started()
-        return [
-            {
+        current = self._driver.current_window_handle
+        try:
+            all_handles = self._driver.window_handles
+        except Exception:
+            all_handles = [s.handle for s in self._tabs.values()]
+
+        results = []
+        for tid, s in self._tabs.items():
+            url = None
+            title = None
+            try:
+                if s.handle in all_handles:
+                    self._driver.switch_to.window(s.handle)
+                    url = self._driver.current_url
+                    title = self._driver.title
+            except Exception:
+                pass
+            results.append({
                 "tab_id": tid,
-                "url": s.page.url,
-                "title": None,
+                "url": url,
+                "title": title,
                 "active": tid == self._active_tab_id,
-            }
-            for tid, s in self._tabs.items()
-        ]
+            })
+        try:
+            self._driver.switch_to.window(current)
+        except Exception:
+            pass
+        return results
+
+    # ------------------------------------------------------------------
+    # Tab helpers
+    # ------------------------------------------------------------------
 
     def _get_tab(self, tab_id: Optional[str]) -> TabState:
         tab_id = tab_id or self._active_tab_id
@@ -264,19 +296,29 @@ class BrowserManager:
             raise TabNotFoundError(f"Tab '{tab_id}' does not exist", tab_id=tab_id)
         return self._tabs[tab_id]
 
-    def get_page(self, tab_id: Optional[str] = None) -> Page:
+    def get_page(self, tab_id: Optional[str] = None) -> Any:
         self._ensure_started()
-        return self._get_tab(tab_id).page
+        state = self._get_tab(tab_id)
+        self._driver.switch_to.window(state.handle)
+        return self._driver
 
     @property
     def active_tab_id(self) -> Optional[str]:
         return self._active_tab_id
+
+    # ------------------------------------------------------------------
+    # Ref map (observe → click/fill routing)
+    # ------------------------------------------------------------------
 
     def set_ref_map(self, tab_id: str, ref_map: Dict[str, str]) -> None:
         self._get_tab(tab_id).last_ref_map = ref_map
 
     def resolve_ref(self, tab_id: str, ref: str) -> Optional[str]:
         return self._get_tab(tab_id).last_ref_map.get(ref)
+
+    # ------------------------------------------------------------------
+    # Dialog handling
+    # ------------------------------------------------------------------
 
     def set_dialog_policy(
         self, tab_id: str, action: str, prompt_text: Optional[str] = None, persist: bool = True
@@ -287,73 +329,44 @@ class BrowserManager:
     def get_last_dialog(self, tab_id: str) -> Optional[DialogRecord]:
         return self._get_tab(tab_id).last_dialog
 
-    def _make_dialog_handler(self, tab_id: str):
-        async def handler(dialog: Dialog) -> None:
-            state = self._tabs.get(tab_id)
-            policy = state.dialog_policy if state else DialogPolicy()
-            try:
-                if policy.action == "accept":
-                    await dialog.accept(policy.prompt_text or "")
-                else:
-                    await dialog.dismiss()
-                taken = policy.action
-            except Exception:
-                logger.exception("Failed to handle dialog on %s", tab_id)
-                taken = "error"
-
+    def handle_dialog(self, tab_id: str) -> None:
+        state = self._get_tab(tab_id)
+        try:
+            alert = self._driver.switch_to.alert
             record = DialogRecord(
-                dialog_type=dialog.type,
-                message=dialog.message,
-                default_value=dialog.default_value,
-                action_taken=taken,
+                dialog_type=alert.text,
+                message=alert.text,
+                default_value=None,
+                action_taken=state.dialog_policy.action,
                 tab_id=tab_id,
             )
-            if state:
-                state.last_dialog = record
-                if not policy.persist:
-                    state.dialog_policy = DialogPolicy()
-            logger.info(
-                "Dialog on %s: type=%s message=%r -> %s",
-                tab_id, dialog.type, dialog.message, taken,
-            )
-
-        return handler
-
-    def _make_download_handler(self, tab_id: str):
-        def handler(download: Download) -> None:
-            asyncio.ensure_future(self._save_download(download, tab_id))
-
-        return handler
-
-    async def _save_download(self, download: Download, tab_id: str) -> None:
-        suggested = download.suggested_filename or f"download-{uuid.uuid4().hex}"
-        dest = os.path.join(self.downloads_dir, suggested)
-        base, ext = os.path.splitext(dest)
-        counter = 1
-        while os.path.exists(dest):
-            dest = f"{base}({counter}){ext}"
-            counter += 1
-        try:
-            await download.save_as(dest)
-            record = {
-                "tab_id": tab_id,
-                "suggested_filename": suggested,
-                "saved_path": dest,
-                "url": download.url,
-            }
-            self._downloads.append(record)
-            logger.info("Download saved: %s -> %s", download.url, dest)
+            if state.dialog_policy.action == "accept":
+                alert.accept()
+            else:
+                alert.dismiss()
+            state.last_dialog = record
+            if not state.dialog_policy.persist:
+                state.dialog_policy = DialogPolicy()
         except Exception:
-            logger.exception("Failed to save download from %s", download.url)
+            pass
+
+    # ------------------------------------------------------------------
+    # Downloads
+    # ------------------------------------------------------------------
 
     def get_downloads(self) -> List[Dict[str, Any]]:
         return list(self._downloads)
 
-    async def wait_for_load(self, tab_id: Optional[str] = None, timeout_ms: Optional[int] = None) -> None:
-        page = self.get_page(tab_id)
+    # ------------------------------------------------------------------
+    # Waits
+    # ------------------------------------------------------------------
+
+    def wait_for_load(self, tab_id: Optional[str] = None, timeout_ms: Optional[int] = None) -> None:
+        driver = self.get_page(tab_id)
+        timeout = (timeout_ms or self.default_timeout_ms) / 1000.0
         try:
-            await page.wait_for_load_state(
-                "load", timeout=timeout_ms or self.default_timeout_ms
+            WebDriverWait(driver, timeout).until(
+                lambda d: d.execute_script("return document.readyState") == "complete"
             )
-        except PlaywrightTimeoutError as exc:
+        except Exception as exc:
             raise BrowserTimeoutError(f"Timed out waiting for page load: {exc}") from exc

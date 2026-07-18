@@ -19,9 +19,11 @@ SKILLS = _all
 # ── Individual skill lists (one per skill directory) ──
 CODE_REVIEW = [s for s in _all if s.name == "code-review"]
 DEVELOPER   = [s for s in _all if s.name == "developer"]
+SYSTEM_DESIGN_PLANNING = [s for s in _all if s.name == "system-design-planning"]
 
 __all__ = [
     "SKILLS",
     "CODE_REVIEW",
     "DEVELOPER",
+    "SYSTEM_DESIGN_PLANNING",
 ]

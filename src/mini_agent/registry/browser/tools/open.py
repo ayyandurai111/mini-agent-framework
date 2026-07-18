@@ -7,16 +7,18 @@ class OpenTool(BaseTool):
     name = "open"
     description = "Navigate to a URL in the browser"
 
-    async def run(self, url: str, new_tab: bool = False,
-                  wait_until: str = "domcontentloaded",
-                  timeout_ms: int = 30000) -> ToolResponse:
+    def run(self, url: str, new_tab: bool = False,
+            wait_until: str = "domcontentloaded",
+            timeout_ms: int = 30000) -> ToolResponse:
         try:
             if new_tab:
-                tab_id = await self.browser.open_tab(url)
+                tab_id = self.browser.open_tab(url)
             else:
-                page = self.get_page()
-                await page.goto(url, wait_until=wait_until, timeout=timeout_ms)
+                driver = self.get_driver()
+                driver.get(url)
                 tab_id = self.browser.active_tab_id
+            if wait_until in ("domcontentloaded", "load", "networkidle"):
+                self.browser.wait_for_load(timeout_ms=timeout_ms)
             return ToolResponse.ok(
                 tool=self.name,
                 message=f"Opened {url}",

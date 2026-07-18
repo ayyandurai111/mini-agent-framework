@@ -68,11 +68,11 @@ class ToolRegistry:
     def list_tools(self) -> List[str]:
         return sorted(self._tools)
 
-    async def dispatch(self, tool_name: str, **params: Any) -> ToolResponse:
+    def dispatch(self, tool_name: str, **params: Any) -> ToolResponse:
         tool = self._tools.get(tool_name)
         if tool is None:
             raise UnknownToolError(
                 f"Unknown tool '{tool_name}'. Available tools: {', '.join(self.list_tools())}",
                 requested=tool_name,
             )
-        return await tool.execute(**params)
+        return tool.execute(**params)

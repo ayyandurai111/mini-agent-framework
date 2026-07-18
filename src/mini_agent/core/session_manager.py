@@ -6,6 +6,7 @@ from typing import Optional
 
 from ..config.settings import SESSION_MAX_TURNS, get_default_memory_dir
 from .memory.conversation import ConversationMemory
+from .memory.long_term_memory import LongTermMemory
 
 
 class SessionManager:
@@ -20,6 +21,7 @@ class SessionManager:
         self.sessions_dir = sessions_dir or get_default_memory_dir()
         self._index_file = os.path.join(self.sessions_dir, "index.json")
         self._cache: dict[str, ConversationMemory] = {}
+        self._ltm_cache: dict[str, LongTermMemory] = {}
         self._index = self._load_index()
 
     # ------------------------------------------------------------------
@@ -55,6 +57,15 @@ class SessionManager:
             result.append(dict(info))
         return result
 
+    def get_long_term_memory(self, session_id: str) -> LongTermMemory:
+        """Return the LongTermMemory for a session (loaded on demand)."""
+        if session_id not in self._index["sessions"]:
+            raise ValueError(f"Session '{session_id}' not found")
+        if session_id not in self._ltm_cache:
+            ltm_file = os.path.join(self.sessions_dir, f"{session_id}_memory.json")
+            self._ltm_cache[session_id] = LongTermMemory(persist_file=ltm_file)
+        return self._ltm_cache[session_id]
+
     def get_session(self, session_id: str) -> ConversationMemory:
         """Return the ConversationMemory for a session (loaded on demand)."""
         if session_id not in self._index["sessions"]:
@@ -72,9 +83,13 @@ class SessionManager:
             return
         del self._index["sessions"][session_id]
         self._cache.pop(session_id, None)
+        self._ltm_cache.pop(session_id, None)
         session_file = self._session_path(session_id)
         if os.path.exists(session_file):
             os.remove(session_file)
+        ltm_file = os.path.join(self.sessions_dir, f"{session_id}_memory.json")
+        if os.path.exists(ltm_file):
+            os.remove(ltm_file)
         if self._index.get("active") == session_id:
             remaining = list(self._index["sessions"].keys())
             self._index["active"] = remaining[0] if remaining else None

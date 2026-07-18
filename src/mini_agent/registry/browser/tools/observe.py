@@ -1,5 +1,5 @@
 from ..models import ToolResponse
-from .base import BaseTool
+from .base import BaseTool, _gen_css_selector
 
 ELEMENT_CATEGORIES = {
     "interactive": [
@@ -19,9 +19,9 @@ class ObserveTool(BaseTool):
     name = "observe"
     description = "Scan page for interactive elements with refs"
 
-    async def run(self, max_elements: int = 250,
-                  include_categories: list = None) -> ToolResponse:
-        page = self.get_page()
+    def run(self, max_elements: int = 250,
+            include_categories: list = None) -> ToolResponse:
+        driver = self.get_driver()
         categories = include_categories or list(ELEMENT_CATEGORIES)
 
         selectors = []
@@ -35,31 +35,36 @@ class ObserveTool(BaseTool):
         elements = []
 
         try:
-            items = await page.query_selector_all(combined)
+            items = driver.find_elements("css selector", combined)
             idx = 0
-            for i, el in enumerate(items):
+            for el in items:
                 if idx >= max_elements:
                     break
                 try:
-                    tag = await el.evaluate("e => e.tagName.toLowerCase()")
-                    text = await el.text_content() or ""
-                    text = text.strip()[:120]
-                    attrs = await el.evaluate("""e => {
-                        const a = {};
-                        for (const attr of e.attributes) a[attr.name] = attr.value;
-                        return a;
-                    }""")
-                    visible = await el.is_visible()
-                    box = await el.bounding_box()
-                    rect = {"x": box["x"], "y": box["y"], "w": box["width"], "h": box["height"]} if box else None
+                    tag = el.tag_name
+                    text = (el.text or "").strip()[:120]
+                    visible = el.is_displayed()
+                    loc = el.location
+                    size = el.size
+                    rect = {"x": loc["x"], "y": loc["y"], "w": size["width"], "h": size["height"]} if size else None
 
+                    attrs = driver.execute_script(
+                        "var a={}; for(var attr of arguments[0].attributes) a[attr.name]=attr.value; return a;",
+                        el,
+                    )
+
+                    css_sel = _gen_css_selector(el)
                     ref = f"e{idx}"
-                    ref_map[ref] = el  # stored as element handle reference
+                    ref_map[ref] = css_sel
                     elements.append({
                         "ref": ref,
                         "tag": tag,
                         "text": text[:80] if text else None,
-                        "attrs": {k: v for k, v in attrs.items() if k in ("id", "class", "name", "type", "placeholder", "href", "src", "alt", "aria-label", "title", "role", "value", "for")},
+                        "attrs": {k: v for k, v in attrs.items() if k in (
+                            "id", "class", "name", "type", "placeholder",
+                            "href", "src", "alt", "aria-label", "title",
+                            "role", "value", "for",
+                        )},
                         "visible": visible,
                         "rect": rect,
                     })
@@ -67,11 +72,8 @@ class ObserveTool(BaseTool):
                 except Exception:
                     continue
 
-            await page.evaluate("""ref_map => {
-                window.__browser_refs = {};
-                for (const [ref, el] of Object.entries(ref_map))
-                    window.__browser_refs[ref] = el;
-            }""", ref_map)
+            tab_id = self.browser.active_tab_id
+            self.browser.set_ref_map(tab_id, ref_map)
 
             return ToolResponse.ok(
                 tool=self.name,

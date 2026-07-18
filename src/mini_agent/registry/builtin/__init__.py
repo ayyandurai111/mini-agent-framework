@@ -13,7 +13,7 @@ Usage:
     from mini_agent.registry.builtin import FILE_TOOLS, WEB_TOOLS
     orchestrator.register_tools(FILE_TOOLS)
 
-NOTE: BROWSER_TOOLS (real browser automation via Playwright) is kept
+NOTE: BROWSER_TOOLS (real browser automation via undetected-chromedriver) is kept
 out of BUILTIN_TOOLS â€” install with `pip install mini_agent[browser]`.
 Chromium is auto-downloaded on first use if missing.
 

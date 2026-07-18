@@ -44,14 +44,25 @@ def web_search(query: str) -> str:
         return f"Search error: {exc}"
 
 
+_DEFAULT_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/150.0.0.0 Safari/537.36"
+
+
 def fetch_url(url: str) -> str:
-    """Fetches a URL and returns its raw content (truncated to 5000 chars)."""
+    """Fetches a URL and returns extracted clean text (full content)."""
+    headers = {"User-Agent": _DEFAULT_UA}
     try:
         import requests
-
-        resp = requests.get(url, timeout=10)
-        text = resp.text
-        return text[:5000] + ("... (truncated)" if len(text) > 5000 else "")
+        resp = requests.get(url, timeout=30, headers=headers)
+        resp.raise_for_status()
+        html = resp.text
+        try:
+            import trafilatura
+            text = trafilatura.extract(html)
+            if text:
+                return text.strip()
+        except Exception:
+            pass
+        return html
     except Exception as exc:
         return f"Fetch error: {exc}"
 

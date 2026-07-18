@@ -1,19 +1,13 @@
 """
 registry/builtin/browser_tools.py
 ---------------------------------
-Professional browser automation tools â€” wraps browser_agent (Playwright)
+Browser automation tools wrapping undetected-chromedriver (Selenium)
 into individual framework Tool objects.
-
-Each browser action (open, click, observe, etc.) is a separate tool with
-proper parameters and descriptions. All share a single browser session.
 
 Install:
     pip install mini_agent[browser]
-
-Chromium is auto-downloaded on first use (or via the pip post-install hook).
 """
 
-import asyncio
 import atexit
 import subprocess
 import sys
@@ -22,33 +16,31 @@ import threading
 from ..tools import Tool
 
 # ---------------------------------------------------------------------------
-# Session manager â€” single browser instance shared across all tool calls
+# Session manager
 # ---------------------------------------------------------------------------
 
 _lock = threading.Lock()
 _agent = None
-_loop = None
 _IMPORT_ERROR = None
 _headless_mode = True
-_stealth_mode = True
 
 
 def _shutdown_browser():
-    global _agent, _loop
-    if _agent is None:
+    global _agent
+    mgr = _agent
+    if mgr is None:
         return
+    _agent = None
     try:
-        _loop.run_until_complete(_agent._manager.shutdown())
+        mgr.shutdown()
     except Exception:
         pass
-    _agent = None
-    _loop = None
 
 
 atexit.register(_shutdown_browser)
 
 
-def init_browser(headless: bool = True, stealth: bool = True):
+def init_browser(headless: bool = True):
     """Configure browser mode before registering BROWSER_TOOLS.
 
     Call BEFORE register_tools(BROWSER_TOOLS), or to restart with a
@@ -57,34 +49,16 @@ def init_browser(headless: bool = True, stealth: bool = True):
     Parameters
     ----------
     headless : bool
-        True  → invisible browser (default)
-        False → visible GUI window
-    stealth : bool
-        True  → enable Playwright stealth (avoids bot detection, default)
-        False → disable stealth (debugging)
+        True  -> invisible browser (default)
+        False -> visible GUI window
     """
-    global _headless_mode, _stealth_mode
+    global _headless_mode
     _shutdown_browser()
     _headless_mode = headless
-    _stealth_mode = stealth
-
-
-def _auto_install_chromium():
-    print("  [browser] Playwright found. Installing Chromium browser (one-time download)...")
-    result = subprocess.run(
-        [sys.executable, "-m", "playwright", "install", "chromium"],
-        capture_output=True, text=True,
-    )
-    if result.returncode != 0:
-        raise RuntimeError(
-            f"Auto-install failed:\n{result.stderr}\n"
-            "Try manually: playwright install chromium"
-        )
-    print("  [browser] Chromium installed successfully.")
 
 
 def _ensure_browser():
-    global _agent, _loop, _IMPORT_ERROR
+    global _agent, _IMPORT_ERROR
     if _agent is not None:
         return
     if _IMPORT_ERROR:
@@ -97,29 +71,19 @@ def _ensure_browser():
             from ..browser.session import BrowserSession
         except ImportError:
             _IMPORT_ERROR = ImportError(
-                "Browser tools require playwright. "
+                "Browser tools require undetected-chromedriver. "
                 "Install: pip install mini_agent[browser]"
             )
             raise _IMPORT_ERROR
 
         try:
-            _loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(_loop)
-            _agent = BrowserSession(headless=_headless_mode, stealth=_stealth_mode)
-            _loop.run_until_complete(_agent.start())
+            _agent = BrowserSession(headless=_headless_mode)
+            _agent.start()
         except Exception as e:
             error_msg = str(e).lower()
             if "executable doesn't exist" in error_msg or "browser" in error_msg:
-                try:
-                    _auto_install_chromium()
-                    _loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(_loop)
-                    _agent = BrowserSession(headless=_headless_mode, stealth=_stealth_mode)
-                    _loop.run_until_complete(_agent.start())
-                    return
-                except Exception as retry_err:
-                    _IMPORT_ERROR = retry_err
-                    raise
+                _IMPORT_ERROR = e
+                raise
             _IMPORT_ERROR = e
             raise
 
@@ -127,7 +91,7 @@ def _ensure_browser():
 def _browser_call(tool_name: str, **params) -> str:
     try:
         _ensure_browser()
-        result = _loop.run_until_complete(_agent.call(tool_name, **params))
+        result = _agent.call(tool_name, **params)
         if isinstance(result, dict):
             lines = []
             for k, v in result.items():
@@ -258,7 +222,7 @@ def browser_close(scope: str = "tab") -> str:
 
 
 # ---------------------------------------------------------------------------
-# Tool list â€” one Tool object per browser action
+# Tool list
 # ---------------------------------------------------------------------------
 
 BROWSER_TOOLS = [

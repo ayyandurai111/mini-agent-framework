@@ -15,47 +15,43 @@ class BrowserSession:
     def __init__(
         self,
         headless: bool = True,
-        browser_type: str = "chromium",
         downloads_dir: str = "./downloads",
         screenshots_dir: str = "./screenshots",
         viewport: Optional[Dict[str, int]] = None,
         user_agent: Optional[str] = None,
         default_timeout_ms: int = 30_000,
-        slow_mo_ms: int = 0,
         proxy: Optional[Dict[str, str]] = None,
-        stealth: bool = True,
+        version_main: Optional[int] = None,
     ):
         self._manager = BrowserManager(
             headless=headless,
-            browser_type=browser_type,
             downloads_dir=downloads_dir,
             screenshots_dir=screenshots_dir,
             viewport=viewport,
             user_agent=user_agent,
             default_timeout_ms=default_timeout_ms,
-            slow_mo_ms=slow_mo_ms,
             proxy=proxy,
-            stealth=stealth,
+            version_main=version_main,
         )
         self._registry = ToolRegistry(self._manager)
         self._started = False
 
-    async def start(self) -> None:
-        await self._manager.start()
+    def start(self) -> None:
+        self._manager.start()
         self._started = True
 
-    async def shutdown(self) -> None:
-        await self._manager.shutdown()
+    def shutdown(self) -> None:
+        self._manager.shutdown()
         self._started = False
 
-    async def __aenter__(self) -> "BrowserSession":
-        await self.start()
+    def __enter__(self) -> "BrowserSession":
+        self.start()
         return self
 
-    async def __aexit__(self, exc_type, exc, tb) -> None:
-        await self.shutdown()
+    def __exit__(self, exc_type, exc, tb) -> None:
+        self.shutdown()
 
-    async def call(self, tool_name: str, **params: Any) -> Dict[str, Any]:
+    def call(self, tool_name: str, **params: Any) -> Dict[str, Any]:
         if not self._started:
             return ToolResponse.fail(
                 tool=tool_name,
@@ -65,7 +61,7 @@ class BrowserSession:
             ).to_dict()
 
         try:
-            response = await self._registry.dispatch(tool_name, **params)
+            response = self._registry.dispatch(tool_name, **params)
         except BrowserAgentError as exc:
             response = ToolResponse.fail(
                 tool=tool_name, message="Tool dispatch failed", error=exc.message, error_code=exc.code
@@ -85,59 +81,59 @@ class BrowserSession:
     def register_tool(self, tool_cls: type) -> None:
         self._registry.register(tool_cls)
 
-    async def open(self, url: str, **kwargs) -> Dict[str, Any]:
-        return await self.call("open", url=url, **kwargs)
+    def open(self, url: str, **kwargs) -> Dict[str, Any]:
+        return self.call("open", url=url, **kwargs)
 
-    async def observe(self, **kwargs) -> Dict[str, Any]:
-        return await self.call("observe", **kwargs)
+    def observe(self, **kwargs) -> Dict[str, Any]:
+        return self.call("observe", **kwargs)
 
-    async def click(self, **kwargs) -> Dict[str, Any]:
-        return await self.call("click", **kwargs)
+    def click(self, **kwargs) -> Dict[str, Any]:
+        return self.call("click", **kwargs)
 
-    async def fill(self, value: str, **kwargs) -> Dict[str, Any]:
-        return await self.call("fill", value=value, **kwargs)
+    def fill(self, value: str, **kwargs) -> Dict[str, Any]:
+        return self.call("fill", value=value, **kwargs)
 
-    async def select(self, **kwargs) -> Dict[str, Any]:
-        return await self.call("select", **kwargs)
+    def select(self, **kwargs) -> Dict[str, Any]:
+        return self.call("select", **kwargs)
 
-    async def check(self, checked: bool = True, **kwargs) -> Dict[str, Any]:
-        return await self.call("check", checked=checked, **kwargs)
+    def check(self, checked: bool = True, **kwargs) -> Dict[str, Any]:
+        return self.call("check", checked=checked, **kwargs)
 
-    async def scroll(self, **kwargs) -> Dict[str, Any]:
-        return await self.call("scroll", **kwargs)
+    def scroll(self, **kwargs) -> Dict[str, Any]:
+        return self.call("scroll", **kwargs)
 
-    async def wait(self, **kwargs) -> Dict[str, Any]:
-        return await self.call("wait", **kwargs)
+    def wait(self, **kwargs) -> Dict[str, Any]:
+        return self.call("wait", **kwargs)
 
-    async def navigate(self, action: str, **kwargs) -> Dict[str, Any]:
-        return await self.call("navigate", action=action, **kwargs)
+    def navigate(self, action: str, **kwargs) -> Dict[str, Any]:
+        return self.call("navigate", action=action, **kwargs)
 
-    async def tabs(self, action: str, **kwargs) -> Dict[str, Any]:
-        return await self.call("tabs", action=action, **kwargs)
+    def tabs(self, action: str, **kwargs) -> Dict[str, Any]:
+        return self.call("tabs", action=action, **kwargs)
 
-    async def upload(self, file_paths, **kwargs) -> Dict[str, Any]:
-        return await self.call("upload", file_paths=file_paths, **kwargs)
+    def upload(self, file_paths, **kwargs) -> Dict[str, Any]:
+        return self.call("upload", file_paths=file_paths, **kwargs)
 
-    async def download(self, **kwargs) -> Dict[str, Any]:
-        return await self.call("download", **kwargs)
+    def download(self, **kwargs) -> Dict[str, Any]:
+        return self.call("download", **kwargs)
 
-    async def dialog(self, **kwargs) -> Dict[str, Any]:
-        return await self.call("dialog", **kwargs)
+    def dialog(self, **kwargs) -> Dict[str, Any]:
+        return self.call("dialog", **kwargs)
 
-    async def read(self, **kwargs) -> Dict[str, Any]:
-        return await self.call("read", **kwargs)
+    def read(self, **kwargs) -> Dict[str, Any]:
+        return self.call("read", **kwargs)
 
-    async def extract(self, kind: str = "tables", **kwargs) -> Dict[str, Any]:
-        return await self.call("extract", kind=kind, **kwargs)
+    def extract(self, kind: str = "tables", **kwargs) -> Dict[str, Any]:
+        return self.call("extract", kind=kind, **kwargs)
 
-    async def execute_js(self, code: str, **kwargs) -> Dict[str, Any]:
-        return await self.call("execute_js", code=code, **kwargs)
+    def execute_js(self, code: str, **kwargs) -> Dict[str, Any]:
+        return self.call("execute_js", code=code, **kwargs)
 
-    async def storage(self, **kwargs) -> Dict[str, Any]:
-        return await self.call("storage", **kwargs)
+    def storage(self, **kwargs) -> Dict[str, Any]:
+        return self.call("storage", **kwargs)
 
-    async def screenshot(self, **kwargs) -> Dict[str, Any]:
-        return await self.call("screenshot", **kwargs)
+    def screenshot(self, **kwargs) -> Dict[str, Any]:
+        return self.call("screenshot", **kwargs)
 
-    async def close(self, scope: str = "tab", **kwargs) -> Dict[str, Any]:
-        return await self.call("close", scope=scope, **kwargs)
+    def close(self, scope: str = "tab", **kwargs) -> Dict[str, Any]:
+        return self.call("close", scope=scope, **kwargs)

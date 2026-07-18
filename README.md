@@ -409,11 +409,22 @@ playwright install chromium
 ```
 
 ```python
-from mini_agent.registry.builtin import BROWSER_TOOLS
+from mini_agent.registry.builtin import init_browser, BROWSER_TOOLS
+
+# headless=True  → invisible (default)
+# headless=False → visible GUI window
+init_browser(headless=False)
 orch.register_tools(BROWSER_TOOLS)
 ```
 
 Available: `browser_open`, `browser_click`, `browser_fill`, `browser_select`, `browser_scroll`, `browser_extract`, `browser_screenshot`, `browser_read`, `browser_observe`, `browser_navigate`, `browser_tabs`, `browser_download`, `browser_dialog`, `browser_wait`, `browser_check`, `browser_close`, `browser_javascript`, `browser_upload`.
+
+To toggle between modes at runtime:
+
+```python
+init_browser(headless=False)  # switch to visible mode
+init_browser(headless=True)   # switch back to headless
+```
 
 ---
 
