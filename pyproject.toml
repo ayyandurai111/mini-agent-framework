@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mini-agent-framework"
-version = "0.2.2"
+version = "0.2.3"
 description = "A dynamic, need-based multi-agent AI framework with session memory, action tracking, tool approval, and browser automation"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -27,10 +27,11 @@ dependencies = [
     "aiohttp>=3.9",
     "fastapi>=0.111",
     "uvicorn>=0.24",
+    "playwright-stealth",
 ]
 
 [project.optional-dependencies]
-browser = ["playwright>=1.38", "playwright-stealth"]
+browser = ["playwright>=1.38"]
 
 [project.scripts]
 mini-agent-install-browser = "mini_agent.cli:install_browser"

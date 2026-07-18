@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import os
+import subprocess
+import sys
 import uuid
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
@@ -22,13 +24,40 @@ from .exceptions import (
     BrowserTimeoutError,
     TabNotFoundError,
 )
-try:
-    from playwright_stealth import stealth_sync
-    _STEALTH_AVAILABLE = True
-except ImportError:
-    _STEALTH_AVAILABLE = False
 
 from .logger import get_logger
+
+logger = get_logger(__name__)
+
+_STEALTH_AVAILABLE = False
+_stealth_sync_fn = None
+
+
+def _ensure_stealth() -> bool:
+    global _STEALTH_AVAILABLE, _stealth_sync_fn
+    if _STEALTH_AVAILABLE:
+        return True
+    try:
+        from playwright_stealth import stealth_sync
+        _stealth_sync_fn = stealth_sync
+        _STEALTH_AVAILABLE = True
+        return True
+    except ImportError:
+        pass
+    try:
+        logger.info("Installing playwright-stealth (one-time)...")
+        subprocess.run(
+            [sys.executable, "-m", "pip", "install", "playwright-stealth", "-q"],
+            capture_output=True, text=True, check=True,
+        )
+        from playwright_stealth import stealth_sync
+        _stealth_sync_fn = stealth_sync
+        _STEALTH_AVAILABLE = True
+        logger.info("playwright-stealth installed successfully.")
+        return True
+    except Exception:
+        logger.warning("Could not install playwright-stealth. Run: pip install playwright-stealth")
+        return False
 
 logger = get_logger(__name__)
 
@@ -175,11 +204,8 @@ class BrowserManager:
     async def open_tab(self, url: Optional[str] = None) -> str:
         self._ensure_started()
         page = await self._context.new_page()
-        if self.stealth:
-            if _STEALTH_AVAILABLE:
-                await stealth_sync(page)
-            else:
-                logger.warning("Stealth enabled but playwright_stealth not installed. Run: pip install playwright-stealth")
+        if self.stealth and _ensure_stealth():
+            await _stealth_sync_fn(page)
         self._tab_counter += 1
         tab_id = f"tab-{self._tab_counter}"
         state = TabState(page=page, tab_id=tab_id)
