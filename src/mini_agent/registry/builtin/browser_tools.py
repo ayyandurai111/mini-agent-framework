@@ -14,6 +14,7 @@ Chromium is auto-downloaded on first use (or via the pip post-install hook).
 """
 
 import asyncio
+import atexit
 import subprocess
 import sys
 import threading
@@ -32,6 +33,21 @@ _headless_mode = True
 _stealth_mode = True
 
 
+def _shutdown_browser():
+    global _agent, _loop
+    if _agent is None:
+        return
+    try:
+        _loop.run_until_complete(_agent._manager.shutdown())
+    except Exception:
+        pass
+    _agent = None
+    _loop = None
+
+
+atexit.register(_shutdown_browser)
+
+
 def init_browser(headless: bool = True, stealth: bool = True):
     """Configure browser mode before registering BROWSER_TOOLS.
 
@@ -47,14 +63,8 @@ def init_browser(headless: bool = True, stealth: bool = True):
         True  → enable Playwright stealth (avoids bot detection, default)
         False → disable stealth (debugging)
     """
-    global _headless_mode, _stealth_mode, _agent, _loop
-    if _agent is not None:
-        try:
-            _loop.run_until_complete(_agent._manager.shutdown())
-        except Exception:
-            pass
-        _agent = None
-        _loop = None
+    global _headless_mode, _stealth_mode
+    _shutdown_browser()
     _headless_mode = headless
     _stealth_mode = stealth
 

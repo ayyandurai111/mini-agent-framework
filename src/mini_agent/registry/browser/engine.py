@@ -27,8 +27,6 @@ from .exceptions import (
 
 from .logger import get_logger
 
-logger = get_logger(__name__)
-
 _STEALTH_AVAILABLE = False
 _stealth_sync_fn = None
 
@@ -46,17 +44,21 @@ def _ensure_stealth() -> bool:
         pass
     try:
         logger.info("Installing playwright-stealth (one-time)...")
-        subprocess.run(
-            [sys.executable, "-m", "pip", "install", "playwright-stealth", "-q"],
-            capture_output=True, text=True, check=True,
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "install", "playwright-stealth"],
+            capture_output=True, text=True, timeout=60,
         )
+        if result.returncode != 0:
+            stderr = result.stderr.strip()
+            logger.warning(f"playwright-stealth install failed: {stderr or 'unknown error'}")
+            return False
         from playwright_stealth import stealth_sync
         _stealth_sync_fn = stealth_sync
         _STEALTH_AVAILABLE = True
         logger.info("playwright-stealth installed successfully.")
         return True
-    except Exception:
-        logger.warning("Could not install playwright-stealth. Run: pip install playwright-stealth")
+    except Exception as exc:
+        logger.warning(f"playwright-stealth install error: {exc}")
         return False
 
 logger = get_logger(__name__)
@@ -71,6 +73,9 @@ CLOUD_SAFE_LAUNCH_ARGS = [
     "--disable-gpu",
     "--disable-extensions",
     "--disable-background-networking",
+    "--log-level=3",
+    "--silent",
+    "--disable-logging",
 ]
 
 
