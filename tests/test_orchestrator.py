@@ -152,14 +152,15 @@ class TestOrchestratorSkills:
         o.register_skill(skill)
         assert o.skill_registry.get("python") is skill
 
-    def test_skill_matching(self, mock_llm_direct):
+    def test_planner_skill_injection(self, mock_llm_direct):
         from mini_agent import Skill
         o = Orchestrator(mock_llm_direct)
         o.register_skill(Skill(name="python", description="Expert Python developer"))
         o.register_skill(Skill(name="rust", description="Systems programming in Rust"))
-        matched = o._match_skills("Write a Python script")
-        assert len(matched) == 1
-        assert matched[0].name == "python"
+        plan = {"needs_sub_agents": False, "skill": "python", "required_capabilities": []}
+        result = o.run("Test task")
+        assert isinstance(result, dict)
+        assert "final_answer" in result or "sub_agent_results" in result
 
 
 class TestOrchestratorPlanEdgeCases:

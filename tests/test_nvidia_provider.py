@@ -67,4 +67,4 @@ class TestNvidiaProviderEdgeCases:
 
     def test_max_retries_default(self):
         provider = NvidiaProvider(api_key="nvapi-test-key-here")
-        assert provider.max_retries == 2
+        assert provider.max_retries == 5

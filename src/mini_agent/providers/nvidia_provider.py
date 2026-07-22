@@ -7,7 +7,7 @@ NVIDIA NIM provider (OpenAI-compatible endpoint).
 import os
 import time
 
-from openai import APIError, OpenAI, RateLimitError, AuthenticationError, APIConnectionError
+from openai import APIError, OpenAI, RateLimitError, AuthenticationError, APIConnectionError, APIStatusError
 
 from ..llm.base import BaseLLMProvider
 
@@ -82,7 +82,7 @@ class NvidiaProvider(BaseLLMProvider):
         top_p: float = 0.95,
         max_tokens: int = 4096,
         base_url: str = "https://integrate.api.nvidia.com/v1",
-        max_retries: int = 2,
+        max_retries: int = 5,
     ):
         if api_key is None:
             api_key = os.environ.get("NVIDIA_API_KEY")
@@ -133,10 +133,10 @@ class NvidiaProvider(BaseLLMProvider):
                 return
             except AuthenticationError as e:
                 raise AuthenticationErrorWrapper(f"API key authentication failed: {e}")
-            except RateLimitError as e:
+            except (RateLimitError, APIStatusError) as e:
                 last_error = e
                 if attempt < self.max_retries - 1:
-                    time.sleep(2 ** attempt)
+                    time.sleep(5 * (2 ** attempt))
             except (APIConnectionError, APIError) as e:
                 last_error = e
                 if attempt < self.max_retries - 1:
@@ -144,7 +144,7 @@ class NvidiaProvider(BaseLLMProvider):
             except Exception as e:
                 raise NvidiaProviderError(f"Unexpected error during streaming: {e}")
 
-        if isinstance(last_error, RateLimitError):
+        if isinstance(last_error, (RateLimitError, APIStatusError)):
             raise RateLimitErrorWrapper(
                 f"NVIDIA API rate limit exceeded after {self.max_retries} attempts. "
                 "Wait a moment and try again."

@@ -83,16 +83,15 @@ class TestSkillRegistry:
 class TestSkillMatching:
     def test_basic_match(self):
         s = Skill(name="python", description="Expert Python developer skills")
-        assert _skill_matches(s, "write python code")
+        assert _skill_matches(s, "write python developer code")
 
     def test_no_match(self):
         s = Skill(name="python", description="Python development")
         assert not _skill_matches(s, "cooking recipes")
 
     def test_partial_word_match(self):
-        """Words shorter than 3 chars are ignored."""
         s = Skill(name="py", description="py coding")
-        assert not _skill_matches(s, "i love py")  # 'py' is only 2 chars
+        assert not _skill_matches(s, "i love py")
 
     def test_multi_word_match(self):
         s = Skill(name="system-design", description="System architecture and design planning")

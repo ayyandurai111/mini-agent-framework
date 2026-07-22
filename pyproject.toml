@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mini-agent-framework"
-version = "0.4.0"
+version = "0.4.1"
 description = "A dynamic, need-based multi-agent AI framework with session memory, action tracking, tool approval, and browser automation"
 readme = "README.md"
 requires-python = ">=3.11"
