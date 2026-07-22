@@ -6,8 +6,6 @@ Plans tasks, spawns agents with matched tools/skills, and aggregates results.
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from typing import List
-
 from ..llm.base import BaseLLMProvider
 from .utils.action_tracker import ActionTracker, console_event_logger
 from .agent import Agent
@@ -136,19 +134,6 @@ class Orchestrator:
         if context:
             parts.append(f"\n\n## CONVERSATION HISTORY\n{context}")
         return "\n".join(parts)
-
-    def _build_skills_context(self, skills: List[Skill]) -> str:
-        if not skills:
-            return ""
-        blocks = []
-        for skill in skills:
-            content = read_skill_content(skill)
-            blocks.append(f"[SKILL: {skill.name}]\n{content}")
-        return "\n\n".join(blocks)
-
-    def _match_skills(self, task: str, instructions: str = "") -> List[Skill]:
-        combined = f"{task} {instructions}"
-        return self.skill_registry.match(combined)
 
     def _plan(self, task: str, session_memory: str = "") -> dict:
         system_prompt = ORCHESTRATOR_SYSTEM_PROMPT
@@ -344,8 +329,12 @@ class Orchestrator:
                 self.session_manager.touch_session(sid)
             return {"final_answer": answer, "sub_agent_results": {}}
 
-        matched_skills = self._match_skills(task)
-        skills_context = self._build_skills_context(matched_skills)
+        skill_name = plan.get("skill", "")
+        skills_context = ""
+        if skill_name:
+            skill = self.skill_registry.get(skill_name)
+            if skill:
+                skills_context = f"[SKILL: {skill.name}]\n{read_skill_content(skill)}"
 
         if not plan.get("needs_sub_agents"):
             capability_names = plan.get("required_capabilities") or self.tool_registry.get_read_only()
@@ -354,7 +343,7 @@ class Orchestrator:
                 instructions=f"Task: {task}",
                 capability_names=capability_names,
                 skills_context=skills_context,
-                skill_names=[s.name for s in matched_skills],
+                skill_names=[skill_name] if skill_name else [],
                 session_memory=memory.get_context(),
             )
             try:

@@ -23,6 +23,7 @@ First research if needed, then output a plan:
 ## OUTPUT FORMAT (Mode 2 only)
 {
   "needs_sub_agents": true or false,
+  "skill": "<skill_name or empty string>",
   "required_capabilities": ["<tool_name>", ...],
   "sub_tasks": [
     {
@@ -56,7 +57,12 @@ Output after web_search:
 **Plan — single agent:**
 Task: "Write a Python function and save to reverse.py."
 Output:
-{"needs_sub_agents": false, "required_capabilities": ["write_text_file"], "sub_tasks": []}
+{"needs_sub_agents": false, "skill": "developer", "required_capabilities": ["write_text_file"], "sub_tasks": []}
+
+**Plan — single agent (no skill needed):**
+Task: "Search the web for AI news."
+Output:
+{"needs_sub_agents": false, "skill": "", "required_capabilities": ["web_search"], "sub_tasks": []}
 
 **Plan — multi-agent:**
 Task: "Research AI trends, then write a Python script based on findings."

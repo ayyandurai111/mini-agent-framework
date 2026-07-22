@@ -71,11 +71,21 @@ class SkillRegistry:
         return load_skills_from_dir(directory)
 
 
+_STOP_WORDS = frozenset({
+    "for", "and", "the", "use", "not", "you", "all", "can", "are", "but",
+    "how", "why", "its", "was", "has", "had", "get", "may", "set", "put",
+    "our", "out", "did", "now", "his", "her", "one", "way", "ask", "own",
+    "any", "see", "try", "who", "too", "end", "off", "old", "yet", "far",
+    "let", "big", "run", "few", "bad", "low", "via", "per", "top", "new",
+    "say", "got", "the", "him", "see", "two", "man",
+})
+
+
 def _skill_matches(skill: Skill, task_lower: str) -> bool:
     desc_lower = skill.description.lower()
-    task_words = set(re.findall(r"[a-zA-Z]{3,}", task_lower))
-    desc_words = set(re.findall(r"[a-zA-Z]{3,}", desc_lower))
-    return bool(task_words & desc_words)
+    task_words = set(re.findall(r"[a-zA-Z]{3,}", task_lower)) - _STOP_WORDS
+    desc_words = set(re.findall(r"[a-zA-Z]{3,}", desc_lower)) - _STOP_WORDS
+    return len(task_words & desc_words) >= 2
 
 
 _FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n?(.*)", re.DOTALL)
