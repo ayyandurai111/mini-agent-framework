@@ -2,7 +2,7 @@
 core/json_utils.py
 ---------------------
 Shared JSON parsing helper. LLMs sometimes wrap JSON in markdown code
-fences despite instructions not to â€” this strips that before parsing.
+fences despite instructions not to \u2014 this strips that before parsing.
 """
 
 import json

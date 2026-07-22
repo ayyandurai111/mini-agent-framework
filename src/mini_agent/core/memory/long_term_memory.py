@@ -14,10 +14,6 @@ class LongTermMemory:
         self._rules: List[Dict[str, Any]] = []
         self._load()
 
-    # ------------------------------------------------------------------
-    # Summaries
-    # ------------------------------------------------------------------
-
     def add_summary(self, turn_range: List[int], summary: str) -> None:
         self._summaries.append({
             "turn_range": turn_range,
@@ -33,10 +29,6 @@ class LongTermMemory:
 
     def get_all_summaries(self) -> List[Dict[str, Any]]:
         return list(self._summaries)
-
-    # ------------------------------------------------------------------
-    # Rules
-    # ------------------------------------------------------------------
 
     def add_rules(self, new_rules: List[Dict[str, str]], source_turn: int) -> None:
         for rule in new_rules:
@@ -70,10 +62,6 @@ class LongTermMemory:
                 return True
         return False
 
-    # ------------------------------------------------------------------
-    # Search
-    # ------------------------------------------------------------------
-
     def search_summaries(self, query: str) -> List[Dict[str, Any]]:
         q = query.lower()
         matches = []
@@ -89,10 +77,6 @@ class LongTermMemory:
             if q in r["rule"].lower():
                 matches.append(r)
         return matches
-
-    # ------------------------------------------------------------------
-    # Persistence
-    # ------------------------------------------------------------------
 
     def _load(self) -> None:
         try:

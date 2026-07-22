@@ -41,13 +41,11 @@ class ConversationMemory:
         token_count = 0
         budget = MAX_CONTEXT_TOKENS
 
-        # 1. Rules (highest priority)
         if hasattr(self, '_rules_text') and self._rules_text:
             block = f"=== USER RULES ===\n{self._rules_text}\n"
             parts.append(block)
             token_count += self._count_tokens(block)
 
-        # 2. Latest summary
         if hasattr(self, '_summary_text') and self._summary_text:
             block = f"=== CONTEXT SUMMARY ===\n{self._summary_text}\n"
             remaining = budget - token_count
@@ -56,7 +54,6 @@ class ConversationMemory:
                 parts.append(block)
                 token_count += block_tokens
 
-        # 3. Recent turns (fill remaining budget, newest first)
         remaining = budget - token_count
         recent_blocks = []
         for turn in reversed(self._turns):
@@ -78,10 +75,6 @@ class ConversationMemory:
         self._rules_text = rules_text
         self._summary_text = summary_text
 
-    # ------------------------------------------------------------------
-    # Token counting
-    # ------------------------------------------------------------------
-
     def _count_tokens(self, text: str) -> int:
         try:
             import tiktoken
@@ -96,10 +89,6 @@ class ConversationMemory:
     def total_tokens(self) -> int:
         return sum(self.count_tokens_in_turns())
 
-    # ------------------------------------------------------------------
-    # Search
-    # ------------------------------------------------------------------
-
     def search(self, query: str) -> List[dict]:
         q = query.lower()
         results = []
@@ -110,10 +99,6 @@ class ConversationMemory:
                 results.append({"turn_index": i, "snippet": snippet})
         return results
 
-    # ------------------------------------------------------------------
-    # Summarization trigger
-    # ------------------------------------------------------------------
-
     def set_summarize_callback(self, callback: Optional[Callable]) -> None:
         self._summarize_callback = callback
 
@@ -123,10 +108,6 @@ class ConversationMemory:
     def remove_turns_range(self, start: int, end: int) -> None:
         del self._turns[start:end]
         self._save()
-
-    # ------------------------------------------------------------------
-    # Formatting
-    # ------------------------------------------------------------------
 
     def _format(self, user_input: str, plan: dict, agents: list, result: str) -> str:
         lines = []
@@ -174,10 +155,6 @@ class ConversationMemory:
         lines.append("=== RESULT ===")
         lines.append(result[:500])
         return "\n".join(lines)
-
-    # ------------------------------------------------------------------
-    # Persistence
-    # ------------------------------------------------------------------
 
     def _save(self):
         try:

@@ -44,7 +44,7 @@ def run_with_tools(
             print(f"\n  (Reached {max_iterations} tool calls. Continue? y/n: ", end="", file=sys.stderr)
             try:
                 choice = input().strip().lower()
-            except (EOFError, KeyboardInterrupt):
+            except (EOFError, KeyboardInterrupt, OSError):
                 choice = "n"
             if choice == "y":
                 iteration = 0

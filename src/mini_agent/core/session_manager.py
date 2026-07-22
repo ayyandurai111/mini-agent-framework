@@ -24,10 +24,6 @@ class SessionManager:
         self._ltm_cache: dict[str, LongTermMemory] = {}
         self._index = self._load_index()
 
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
-
     def create_session(self, name: Optional[str] = None) -> dict:
         """Create a new session and return its metadata dict."""
         session_id = uuid.uuid4().hex
@@ -118,10 +114,6 @@ class SessionManager:
             info["turn_count"] = len(memory.raw_turns())
             info["updated_at"] = datetime.now().isoformat()
             self._save_index()
-
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
 
     def _session_path(self, session_id: str) -> str:
         return os.path.join(self.sessions_dir, f"{session_id}.json")

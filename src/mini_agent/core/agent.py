@@ -21,11 +21,11 @@ class Agent:
         llm_provider: BaseLLMProvider,
         tools: list = None,
         depth: int = 0,
-        spawn_callback=None,        # reference to orchestrator.spawn_agent, for recursion
-        approval_callback=None,     # (tool_name, arguments) -> bool, for gated tools
+        spawn_callback=None,
+        approval_callback=None,
         session_memory: str = "",
-        action_tracker: ActionTracker = None,  # live action events
-        skills_context: str = "",   # matched skill instructions injected into prompt
+        action_tracker: ActionTracker = None,
+        skills_context: str = "",
     ):
         self.id = f"{role.replace(' ', '_')}_{uuid.uuid4().hex[:6]}"
         self.role = role

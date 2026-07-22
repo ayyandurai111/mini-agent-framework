@@ -146,7 +146,6 @@ _PACKAGE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 def discover_package_skills() -> "List[Skill]":
     """Auto-discover all skill subdirectories inside the skills package dir."""
-    """Auto-discover all skill subdirectories inside the skills package dir."""
     skills = []
     for entry in sorted(os.listdir(_PACKAGE_DIR)):
         skill_dir = os.path.join(_PACKAGE_DIR, entry)

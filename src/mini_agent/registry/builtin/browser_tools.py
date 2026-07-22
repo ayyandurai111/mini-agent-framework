@@ -15,9 +15,6 @@ import threading
 
 from ..tools import Tool
 
-# ---------------------------------------------------------------------------
-# Session manager
-# ---------------------------------------------------------------------------
 
 _lock = threading.Lock()
 _agent = None
@@ -107,10 +104,6 @@ def _browser_call(tool_name: str, **params) -> str:
     except Exception as exc:
         return f"Browser error: {exc}"
 
-
-# ---------------------------------------------------------------------------
-# Individual browser tools
-# ---------------------------------------------------------------------------
 
 def browser_open(url: str, new_tab: bool = False, wait_until: str = "domcontentloaded", timeout_ms: int = 30000) -> str:
     return _browser_call("open", url=url, new_tab=new_tab, wait_until=wait_until, timeout_ms=timeout_ms)
@@ -220,10 +213,6 @@ def browser_screenshot(full_page: bool = False, file_name: str = None,
 def browser_close(scope: str = "tab") -> str:
     return _browser_call("close", scope=scope)
 
-
-# ---------------------------------------------------------------------------
-# Tool list
-# ---------------------------------------------------------------------------
 
 BROWSER_TOOLS = [
     Tool(name="browser_open", description="Navigate to a URL in the browser", func=browser_open,

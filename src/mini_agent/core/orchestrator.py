@@ -201,7 +201,6 @@ class Orchestrator:
             parsed = try_parse_json(raw_response)
             plan = parsed if isinstance(parsed, dict) else {"needs_sub_agents": False, "direct_answer": "", "sub_tasks": []}
 
-        # Strip hallucinated skills not in registry
         for t in plan.get("sub_tasks", []):
             s = t.get("skill", "")
             if s and not self.skill_registry.get(s):
@@ -444,11 +443,11 @@ class Orchestrator:
                 f"Original task: {original_task}\n\n"
                 f"Sub-agent results below:\n\n{combined}\n\n"
                 f"Synthesize these into one clear, complete final answer. "
-                f"Output only the final answer â€” no meta-commentary."
+                f"Output only the final answer \u2014 no meta-commentary."
             )
             return self.llm_provider.generate(
                 system_prompt="You are an Aggregator AI that merges sub-agent outputs into one coherent final answer.",
                 user_message=aggregation_prompt,
             )
         except (OSError, RuntimeError, ValueError):
-            return f"[Aggregation fallback â€” raw sub-agent results]\n\n{combined}"
+            return f"[Aggregation fallback \u2014 raw sub-agent results]\n\n{combined}"

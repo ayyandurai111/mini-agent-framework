@@ -11,8 +11,6 @@ import uuid
 
 from ..tools import Tool
 
-# Safe arithmetic evaluation - raw eval() is avoided since it can execute
-# arbitrary code, which is a security risk when the input comes from an LLM.
 _ALLOWED_OPERATORS = {
     ast.Add: operator.add,
     ast.Sub: operator.sub,
