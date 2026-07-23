@@ -1,6 +1,6 @@
 # Mini Agent Framework — Developer Documentation
 
-**Version:** 0.3.0  
+**Version:** 0.4.1  
 **Package:** `mini-agent-framework`  
 **Repository:** https://github.com/ayyandurai111/mini-agent-framework
 
@@ -184,7 +184,6 @@ Orchestrator(
 | `spawn_agent(role, instructions, ...)` | Creates and registers an `Agent` with matched tools/skills |
 | `_run_agents_need_based(sub_tasks)` | Executes sub-tasks with dependency resolution and `ThreadPoolExecutor` parallelism |
 | `_aggregate(task, results)` | Merges agent outputs into one answer via LLM |
-| `_match_skills(task)` | Uses keyword overlap to match registered skills to the current task |
 | `_get_memory(session_id)` | Resolves the correct memory context from session or default |
 
 ### 2.2 Agent
@@ -353,18 +352,19 @@ class SkillRegistry:
     def load_from_dir(directory)        # Load all skills from a directory tree
 ```
 
-### 4.3 Skill Matching
+### 4.3 Skill Injection
 
-Skills are matched to tasks using **keyword overlap** between the task text and skill descriptions:
+Skills are **not** keyword-matched to tasks. The **planner LLM** decides which skill (if any) a worker needs, via the `skill` field in the plan JSON — same way it selects tools via `required_capabilities`. Only the planned skill is injected into the agent's system prompt.
 
 ```python
-def _skill_matches(skill, task_lower):
-    task_words = set(re.findall(r"[a-zA-Z]{3,}", task_lower))
-    desc_words = set(re.findall(r"[a-zA-Z]{3,}", desc_lower))
-    return bool(task_words & desc_words)  # Any shared word >= 3 chars
+# Planner output for single-agent
+{"needs_sub_agents": false, "skill": "developer", "required_capabilities": ["write_text_file"]}
+
+# Planner output for multi-agent (per sub-task)
+{"skill": "code-review", "depends_on": [0]}
 ```
 
-Only skills whose description shares at least one word (3+ characters) with the task text are matched. The matched skill content is injected into the agent's system prompt as `RELEVANT SKILLS`.
+The `SkillRegistry.match()` method is still available with stop-word filtering and a ≥2 word overlap threshold, but it is no longer used by the Orchestrator.
 
 ### 4.4 Skill File Format
 
@@ -422,24 +422,28 @@ Connects to [NVIDIA NIM](https://integrate.api.nvidia.com/v1) using the OpenAI S
 ```python
 NvidiaProvider(
     api_key: str = None,                        # Falls back to NVIDIA_API_KEY env var
-    model: str = "mistralai/mistral-medium-3.5-128b",
+    model: str = "deepseek-ai/deepseek-v4-flash",
     temperature: float = 0.7,
     top_p: float = 0.95,
     max_tokens: int = 4096,
     base_url: str = "https://integrate.api.nvidia.com/v1",
-    max_retries: int = 2
+    max_retries: int = 5                        # Exponential backoff: 5s, 10s, 20s, 40s
 )
 ```
 
-**Allowed models** (validated at construction):
-- `mistralai/mistral-medium-3.5-128b` (default)
-- `deepseek-ai/deepseek-v4-flash`
+**Recommended models** (warns if not in list, still works):
+- `deepseek-ai/deepseek-v4-flash` (default)
+- `meta/llama-3.3-70b-instruct`
+- `mistralai/mistral-large-2-instruct`
+- `nvidia/llama-3.1-nemotron-70b-instruct`
+- `qwen/qwen2.5-72b-instruct`
+- `google/gemma-2-27b-it`
+- `microsoft/phi-4`
 - `deepseek-ai/deepseek-v4-pro`
 - `nvidia/nemotron-3-ultra-550b-a55b`
-- `z-ai/glm-5.2`
-- `poolside/laguna-xs-2.1`
-- `stepfun-ai/step-3.7-flash`
-- `moonshotai/kimi-k2.6`
+- and more in `RECOMMENDED_MODELS` list
+
+Any model available in the NVIDIA catalog can be used — unknown models print a warning but work normally.
 
 **Error types:**
 - `AuthenticationErrorWrapper` — invalid/missing API key
@@ -448,7 +452,7 @@ NvidiaProvider(
 - `NvidiaProviderError` — generic provider error
 
 **Retry behavior:**
-- RateLimitError: sleeps `2^attempt` seconds between retries
+- RateLimitError / APIStatusError (429): sleeps `5 * 2^attempt` seconds between retries (5s, 10s, 20s, 40s)
 - ConnectionError/APIError: sleeps 1 second between retries
 - Other exceptions: raised immediately
 
@@ -903,15 +907,15 @@ Task: "Research AI trends and write a summary"
       ┌─────────────────┐                    ┌─────────────────┐
       │ "final_answer"  │                    │ "needs_sub_     │
       │ in response     │                    │ agents": true   │
-      └────────┬────────┘                    └────────┬────────┘
-               │                                      │
-               ▼                                      ▼
-      Return direct answer                  5. _match_skills(task)
-                                           → Keyword overlap matching
-                                           → Build skills_context
-                                                    │
-                                                    ▼
-                                           6. _run_agents_need_based(sub_tasks)
+       └────────┬────────┘                    └────────┬────────┘
+                │                                      │
+                ▼                                      ▼
+       Return direct answer                    5. Read plan.skill field
+                                                → Load single skill if set
+                                                → Build skills_context
+                                                         │
+                                                         ▼
+                                               6. _run_agents_need_based(sub_tasks)
                                               → Build dependency graph
                                               → Resolve execution levels
                                               → For each level (parallel):

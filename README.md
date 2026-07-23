@@ -33,11 +33,10 @@ No fixed agent pool — the Orchestrator plans the task, spawns worker agents wi
 pip install mini-agent-framework
 ```
 
-### With browser automation (Playwright)
+### With browser automation
 
 ```bash
 pip install mini-agent-framework[browser]
-mini-agent-install-browser
 ```
 
 ---
@@ -107,8 +106,9 @@ llm = NvidiaProvider(
 )
 ```
 
-Default model: `mistralai/mistral-medium-3.5-128b`.  
-API key must start with `nvapi-`. Get one at [build.nvidia.com](https://build.nvidia.com).
+Default model: `deepseek-ai/deepseek-v4-flash`.  
+API key must start with `nvapi-`. Get one at [build.nvidia.com](https://build.nvidia.com).  
+NVIDIA free tier is ~40 requests/minute — the provider retries 5 times with exponential backoff on 429 errors.
 
 ### Custom Provider
 
@@ -251,7 +251,7 @@ orch.load_skills_from_dir("path/to/skills/")
 orch.register_skills([skill1, skill2])
 ```
 
-Skills are auto-matched using keyword overlap between the task text and skill descriptions.
+The **planner LLM** decides which skill (if any) a worker needs, via the `skill` field in the plan JSON — same way it selects tools. Only the planned skill is injected into the agent prompt.
 
 ---
 
@@ -401,11 +401,10 @@ while True:
 
 ## Browser Tools (Opt-in)
 
-Requires Playwright:
+Requires undetected-chromedriver (auto-installed with `[browser]` extra):
 
 ```bash
 pip install mini-agent-framework[browser]
-playwright install chromium
 ```
 
 ```python
